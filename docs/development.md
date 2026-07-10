@@ -25,6 +25,22 @@ The API should be available at:
 http://127.0.0.1:8000
 ```
 
+## Initialize Database
+
+The default SQLite database URL is:
+
+```env
+DATABASE_URL=sqlite:///./data/app.db
+```
+
+Create the SQLite tables manually with:
+
+```powershell
+python -m apps.api.app.init_db
+```
+
+The app also creates tables during FastAPI startup. Do not commit `data/app.db`.
+
 ## Test Current Endpoints
 
 PowerShell:

@@ -4,7 +4,7 @@ WrongBook is a personal wrong-question collection and review tool. The goal is t
 
 ## Current Status
 
-The project is currently a minimal FastAPI backend. It has been moved into `apps/api` and can be started locally, but it does not yet include SQLite models, image upload, OCR jobs, an OCR worker, or a frontend.
+The project is currently a lightweight FastAPI backend in `apps/api`. It has basic health endpoints plus the first SQLite/SQLAlchemy data model and database initialization logic. It does not yet include image upload, OCR business APIs, an OCR worker, or a frontend.
 
 ## Local API Startup
 
@@ -19,6 +19,22 @@ python -m uvicorn apps.api.app.main:app --reload
 
 The root `requirements.txt` is kept for compatibility, but `apps/api/requirements.txt` is the recommended dependency file for the API.
 
+## Database
+
+The API uses SQLite for the first version. The default database URL is:
+
+```env
+DATABASE_URL=sqlite:///./data/app.db
+```
+
+Initialize the database tables manually with:
+
+```powershell
+python -m apps.api.app.init_db
+```
+
+The FastAPI app also initializes tables during startup. The real database file `data/app.db` must not be committed. The repository keeps only `data/.gitkeep` as an empty directory placeholder.
+
 ## API Endpoints
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
@@ -32,7 +48,10 @@ Keep these out of Git:
 
 - `.venv/`
 - `.env`
-- `data/`
+- `data/app.db`
+- `*.db`
+- `*.sqlite`
+- `*.sqlite3`
 - `uploads/`
 - `logs/`
 - `runtime/`

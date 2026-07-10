@@ -11,32 +11,24 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - `GET /health` endpoint added
 - backend migrated to `apps/api`
 - current backend entrypoint is `apps.api.app.main:app`
-
-## Current Documentation Task
-
-- create and update project documentation
-- create `AGENTS.md` for Continue/Codex development rules
-- document product scope
-- document architecture
-- document OCR Worker design
-- document local development workflow
+- project documentation and `AGENTS.md` created
+- SQLite data model and database initialization logic added
 
 ## Next Tasks
 
 Recommended order:
 
-1. SQLite data model
-2. image upload API
-3. OCR job table and API
-4. OCR Worker mock mode
-5. PaddleOCR Worker mode
-6. Vue 3 + Vite frontend
+1. image upload API
+2. OCR job table API
+3. OCR Worker mock mode
+4. PaddleOCR Worker mode
+5. Vue 3 + Vite frontend
 
 ## Task Boundaries
 
 Keep each task small.
 
-Do not combine database schema, upload API, OCR worker, and frontend work in one change.
+Do not combine upload API, OCR worker, and frontend work in one change.
 
 The first version should avoid:
 
@@ -52,5 +44,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please implement the first SQLite data model for WrongBook in the existing FastAPI backend. Keep it lightweight, use SQLite only, do not implement OCR, do not create a frontend, and include verification steps.
+Please implement the first image upload API for WrongBook using the existing FastAPI app and SQLite data model. Store image files on disk, store only paths in SQLite, do not implement OCR processing, do not create a frontend, and include verification steps.
 ```
