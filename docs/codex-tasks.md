@@ -17,21 +17,22 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - OCR Job Worker interface added
 - Worker token authentication added
 - safe uploaded asset file endpoint added at `GET /api/assets/{asset_id}/file`
+- mock OCR Worker loop added
+- focused integration tests added for upload, asset download, OCR jobs, and mock Worker flow
 
 ## Current Task
 
-- implement mock OCR Worker minimum loop
-- poll OCR jobs from the backend
-- fetch uploaded assets through the backend
-- submit mock OCR results or failures
+- prepare PaddleOCR Worker mode behind a selectable OCR engine
+- keep mock mode as the default local verification path
+- do not install PaddleOCR on the server
 
 ## Next Tasks
 
 Recommended order:
 
-1. add focused automated tests for OCR job and mock Worker flow
-2. PaddleOCR Worker mode
-3. Vue 3 + Vite frontend
+1. PaddleOCR Worker mode
+2. Vue 3 + Vite frontend
+3. review scheduling and mistake tagging APIs
 
 ## Task Boundaries
 
@@ -53,5 +54,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please add focused automated tests for the WrongBook OCR job API and mock Worker flow. Do not install PaddleOCR, do not create a frontend, and keep the server lightweight.
+Please add a selectable OCR engine layer for the WrongBook Worker. Keep mock mode as the default, add a PaddleOCR placeholder mode that fails jobs with a clear dependency error when PaddleOCR is not installed, do not install PaddleOCR yet, do not create a frontend, and keep server-side OCR disabled.
 ```

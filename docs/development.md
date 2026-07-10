@@ -67,6 +67,18 @@ curl http://127.0.0.1:8000/
 curl http://127.0.0.1:8000/health
 ```
 
+## Run Automated Tests
+
+The current tests start a temporary API server with an isolated SQLite database and upload directory. They do not use `data/app.db`, do not use `data/uploads`, and do not require PaddleOCR.
+
+PowerShell:
+
+```powershell
+cd D:\Code\WB\wrongbook
+.\.venv\Scripts\Activate.ps1
+python -m unittest discover -s tests
+```
+
 ## Git Safety
 
 Before committing, check:

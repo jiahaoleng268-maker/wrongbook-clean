@@ -118,6 +118,18 @@ Process at most one polling cycle and exit:
 python apps\ocr-worker\mock_worker.py --once
 ```
 
+## Tests
+
+The integration tests use only the Python standard library plus the project runtime dependencies. They start a temporary local API server with an isolated SQLite database and upload directory, then verify the upload, asset download, OCR job lifecycle, and mock Worker flow.
+
+Run tests from the repository root:
+
+```powershell
+cd D:\Code\WB\wrongbook
+.\.venv\Scripts\Activate.ps1
+python -m unittest discover -s tests
+```
+
 ## API Endpoints
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
