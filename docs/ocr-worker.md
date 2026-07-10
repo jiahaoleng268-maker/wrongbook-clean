@@ -82,6 +82,7 @@ X-Worker-Name: windows-laptop-01
 
 Implemented endpoints:
 
+- `GET /api/assets/{asset_id}/file`
 - `GET /api/ocr/jobs/next`
 - `GET /api/ocr/jobs/{id}`
 - `POST /api/ocr/jobs/{id}/heartbeat`
@@ -107,9 +108,13 @@ the Worker should sleep for `POLL_INTERVAL` seconds and poll again.
 
 If a job is returned, the server has already moved it from `pending` to `running` and recorded `worker_name` and `started_at`.
 
-2. Read the image path from `job.file_path`.
+2. Read `job.asset_id` and fetch the image from the backend:
 
-For the current local development setup, the Worker may run on the same Windows machine as the server and read the path directly. A future remote Worker may need an image download endpoint; that is outside the current task.
+```powershell
+curl.exe "http://127.0.0.1:8000/api/assets/1/file" -o question.jpg
+```
+
+The file endpoint only serves files from the configured `UPLOAD_DIR`, which defaults to `./data/uploads`. It returns HTTP 404 for missing files or stored paths outside the upload directory.
 
 3. Send heartbeat while processing:
 
@@ -141,15 +146,62 @@ curl.exe -X POST -H "X-Worker-Token: change-me" "http://127.0.0.1:8000/api/ocr/j
 
 The server moves the same job row back to `pending`, clears `error_message`, `started_at`, and `finished_at`, and keeps the original record.
 
+## Mock Worker
+
+The mock Worker lives at:
+
+```text
+apps\ocr-worker\mock_worker.py
+```
+
+It does not install or use PaddleOCR. It uses only Python standard library modules.
+
+Configuration defaults:
+
+```env
+SERVER_URL=http://127.0.0.1:8000
+WORKER_TOKEN=change-me
+WORKER_NAME=local-mock-worker
+POLL_INTERVAL=3
+```
+
+Run the API first:
+
+```powershell
+cd D:\Code\WB\wrongbook
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn apps.api.app.main:app --reload
+```
+
+Then run the mock Worker continuously:
+
+```powershell
+python apps\ocr-worker\mock_worker.py
+```
+
+For a one-shot local verification, process at most one pending job and exit:
+
+```powershell
+python apps\ocr-worker\mock_worker.py --once
+```
+
+The mock Worker loop is:
+
+1. call `GET /api/ocr/jobs/next`
+2. sleep for `POLL_INTERVAL` seconds when the response is `{"job": null}`
+3. when a job is returned, fetch `GET /api/assets/{asset_id}/file`
+4. submit `raw_text = "mock OCR text from worker"` to `POST /api/ocr/jobs/{id}/result`
+5. submit `POST /api/ocr/jobs/{id}/fail` if processing raises an error
+
 ## Planned Worker Modes
 
 `mock` mode:
 
 - does not install PaddleOCR
-- polls or simulates OCR jobs
+- polls real server-side OCR jobs
+- fetches uploaded assets through the backend file endpoint
 - returns predictable fake OCR text
-- is used to verify the server job flow first
-- should be implemented before PaddleOCR mode
+- is implemented as the first end-to-end Worker loop
 
 `paddle` mode:
 
@@ -164,4 +216,4 @@ The server moves the same job row back to `pending`, clears `error_message`, `st
 
 Do not install PaddleOCR yet.
 
-The server-side OCR job API now exists. The next OCR-related step should be a mock Worker client that calls these endpoints and returns predictable fake OCR text. PaddleOCR installation and model wiring should happen only after the API and mock worker flow are stable.
+The server-side OCR job API and mock Worker loop now exist. PaddleOCR installation and model wiring should happen only after the API and mock worker flow are stable.

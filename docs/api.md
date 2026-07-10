@@ -81,6 +81,26 @@ Current scope:
 - no frontend
 - no image binary data stored in SQLite
 
+## Download Asset File
+
+### GET /api/assets/{asset_id}/file
+
+Returns the uploaded file for one `QuestionAsset`.
+
+Safety rules:
+
+- looks up the asset by `asset_id`
+- resolves the stored path before serving the file
+- only serves files under the configured `UPLOAD_DIR`, which defaults to `./data/uploads`
+- returns HTTP 404 when the asset does not exist, the file is missing, or the stored path points outside `UPLOAD_DIR`
+- does not expose arbitrary local filesystem paths
+
+Example:
+
+```powershell
+curl.exe -o question.jpg "http://127.0.0.1:8000/api/assets/1/file"
+```
+
 ## OCR Worker Authentication
 
 All `/api/ocr/jobs/*` endpoints require a Worker token. The server reads it from:

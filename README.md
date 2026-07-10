@@ -4,7 +4,7 @@ WrongBook is a personal wrong-question collection and review tool. The goal is t
 
 ## Current Status
 
-The project is currently a lightweight FastAPI backend in `apps/api`. It has basic health endpoints, the first SQLite/SQLAlchemy data model, database initialization logic, a local image upload API, and polling-style OCR job endpoints for a future Worker. It does not include server-side OCR processing, an OCR Worker client, PaddleOCR, or a frontend.
+The project is currently a lightweight FastAPI backend in `apps/api` plus a minimal mock OCR Worker in `apps/ocr-worker`. It has basic health endpoints, the first SQLite/SQLAlchemy data model, database initialization logic, a local image upload API, polling-style OCR job endpoints, and a safe uploaded-asset file endpoint. It does not include server-side OCR processing, PaddleOCR, or a frontend.
 
 ## Local API Startup
 
@@ -93,11 +93,37 @@ OCR job endpoints:
 
 The server still does not run PaddleOCR or any OCR model.
 
+## Mock OCR Worker
+
+The mock Worker is a local development utility that exercises the OCR job flow without installing PaddleOCR. It polls the API, validates that the uploaded image file can be fetched through the backend, and submits predictable text.
+
+Environment variables:
+
+```env
+SERVER_URL=http://127.0.0.1:8000
+WORKER_TOKEN=change-me
+WORKER_NAME=local-mock-worker
+POLL_INTERVAL=3
+```
+
+Run continuously:
+
+```powershell
+python apps\ocr-worker\mock_worker.py
+```
+
+Process at most one polling cycle and exit:
+
+```powershell
+python apps\ocr-worker\mock_worker.py --once
+```
+
 ## API Endpoints
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
 - `GET /health` returns `{"status":"ok"}`
 - `POST /api/questions/upload` uploads one image and creates a pending OCR job
+- `GET /api/assets/{asset_id}/file` returns an uploaded asset file only if it is under `UPLOAD_DIR`
 - `GET /api/ocr/jobs/next` claims a pending OCR job for a token-authenticated Worker
 - `GET /api/ocr/jobs/{id}` returns OCR job status and details
 - `POST /api/ocr/jobs/{id}/heartbeat` updates OCR job activity

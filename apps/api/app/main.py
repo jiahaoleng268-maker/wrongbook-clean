@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -133,6 +134,25 @@ def _get_ocr_job_or_404(db: Session, job_id: int) -> OCRJob:
     return job
 
 
+def _resolve_upload_file_path(stored_file_path: str) -> Path:
+    upload_root = UPLOAD_DIR.resolve()
+    candidate_path = Path(stored_file_path)
+
+    if not candidate_path.is_absolute():
+        candidate_path = Path.cwd() / candidate_path
+
+    resolved_path = candidate_path.resolve()
+    try:
+        resolved_path.relative_to(upload_root)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset file not found.",
+        )
+
+    return resolved_path
+
+
 def _validate_upload(file: UploadFile) -> str:
     content_type = file.content_type or ""
     filename = file.filename or ""
@@ -151,6 +171,25 @@ def _validate_upload(file: UploadFile) -> str:
         )
 
     return extension
+
+
+@app.get("/api/assets/{asset_id}/file")
+def get_asset_file(asset_id: int, db: Session = Depends(get_db)):
+    asset = db.get(QuestionAsset, asset_id)
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset file not found.",
+        )
+
+    file_path = _resolve_upload_file_path(asset.file_path)
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset file not found.",
+        )
+
+    return FileResponse(file_path)
 
 
 @app.get("/api/ocr/jobs/next", dependencies=[Depends(require_worker_token)])

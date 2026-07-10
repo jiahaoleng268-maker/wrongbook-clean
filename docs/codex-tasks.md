@@ -14,19 +14,22 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - project documentation and `AGENTS.md` created
 - SQLite data model and database initialization logic added
 - image upload API added at `POST /api/questions/upload`
+- OCR Job Worker interface added
+- Worker token authentication added
+- safe uploaded asset file endpoint added at `GET /api/assets/{asset_id}/file`
 
 ## Current Task
 
-- implement OCR Job Worker interface
-- add Worker token authentication
-- support claim, status, heartbeat, result, fail, and retry endpoints
-- document the Worker polling flow
+- implement mock OCR Worker minimum loop
+- poll OCR jobs from the backend
+- fetch uploaded assets through the backend
+- submit mock OCR results or failures
 
 ## Next Tasks
 
 Recommended order:
 
-1. OCR Worker mock mode
+1. add focused automated tests for OCR job and mock Worker flow
 2. PaddleOCR Worker mode
 3. Vue 3 + Vite frontend
 
@@ -50,5 +53,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please implement the first OCR job API for WrongBook using the existing FastAPI app and SQLite data model. Do not implement OCR processing, do not install PaddleOCR, do not create a frontend, and include verification steps.
+Please add focused automated tests for the WrongBook OCR job API and mock Worker flow. Do not install PaddleOCR, do not create a frontend, and keep the server lightweight.
 ```
