@@ -4,7 +4,7 @@ WrongBook is a personal wrong-question collection and review tool. The goal is t
 
 ## Current Status
 
-The project is currently a lightweight FastAPI backend in `apps/api`. It has basic health endpoints, the first SQLite/SQLAlchemy data model, database initialization logic, and a local image upload API. It does not yet include OCR business processing, an OCR worker, PaddleOCR, or a frontend.
+The project is currently a lightweight FastAPI backend in `apps/api`. It has basic health endpoints, the first SQLite/SQLAlchemy data model, database initialization logic, a local image upload API, and polling-style OCR job endpoints for a future Worker. It does not include server-side OCR processing, an OCR Worker client, PaddleOCR, or a frontend.
 
 ## Local API Startup
 
@@ -59,11 +59,51 @@ curl.exe -X POST "http://127.0.0.1:8000/api/questions/upload" -F "file=@D:\path\
 
 The upload API stores the image path in SQLite, creates a draft `Question`, creates an original `QuestionAsset`, and creates a pending `OCRJob`. It does not run OCR.
 
+## OCR Job API
+
+The server exposes a small polling API for an external OCR Worker. The Worker runs elsewhere, claims pending jobs from SQLite, performs OCR outside the server, and posts the result back.
+
+Worker requests require a token. Configure it with:
+
+```env
+WORKER_TOKEN=change-me
+```
+
+Pass the token with either header:
+
+```text
+X-Worker-Token: change-me
+Authorization: Bearer change-me
+```
+
+Optional Worker name header:
+
+```text
+X-Worker-Name: windows-laptop-01
+```
+
+OCR job endpoints:
+
+- `GET /api/ocr/jobs/next` claims the oldest pending job and marks it `running`
+- `GET /api/ocr/jobs/{id}` returns one OCR job
+- `POST /api/ocr/jobs/{id}/heartbeat` updates the job heartbeat timestamp and returns current status
+- `POST /api/ocr/jobs/{id}/result` marks the job `succeeded` and writes `raw_text` to `Question.raw_text`
+- `POST /api/ocr/jobs/{id}/fail` marks the job `failed` with an error message
+- `POST /api/ocr/jobs/{id}/retry` moves a failed job back to `pending`
+
+The server still does not run PaddleOCR or any OCR model.
+
 ## API Endpoints
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
 - `GET /health` returns `{"status":"ok"}`
 - `POST /api/questions/upload` uploads one image and creates a pending OCR job
+- `GET /api/ocr/jobs/next` claims a pending OCR job for a token-authenticated Worker
+- `GET /api/ocr/jobs/{id}` returns OCR job status and details
+- `POST /api/ocr/jobs/{id}/heartbeat` updates OCR job activity
+- `POST /api/ocr/jobs/{id}/result` stores OCR output and succeeds the job
+- `POST /api/ocr/jobs/{id}/fail` stores failure details
+- `POST /api/ocr/jobs/{id}/retry` retries a failed job
 
 ## Repository Safety
 

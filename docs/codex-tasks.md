@@ -17,18 +17,18 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 
 ## Current Task
 
-- verify the image upload API
-- confirm uploaded files are ignored by Git
-- confirm uploaded records create `Question`, `QuestionAsset`, and pending `OCRJob` rows
+- implement OCR Job Worker interface
+- add Worker token authentication
+- support claim, status, heartbeat, result, fail, and retry endpoints
+- document the Worker polling flow
 
 ## Next Tasks
 
 Recommended order:
 
-1. OCR job table API
-2. OCR Worker mock mode
-3. PaddleOCR Worker mode
-4. Vue 3 + Vite frontend
+1. OCR Worker mock mode
+2. PaddleOCR Worker mode
+3. Vue 3 + Vite frontend
 
 ## Task Boundaries
 

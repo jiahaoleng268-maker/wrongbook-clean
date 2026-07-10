@@ -1,15 +1,19 @@
-﻿from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager
 from datetime import datetime
 from hashlib import sha256
+from secrets import compare_digest
+from typing import Any, Optional
+import json
 import os
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.api.app.database import get_db, init_db
-from apps.api.app.models import OCRJob, Question, QuestionAsset
+from apps.api.app.models import OCRJob, Question, QuestionAsset, utc_now
 
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
@@ -20,6 +24,19 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": {".png"},
     "image/webp": {".webp"},
 }
+DEFAULT_WORKER_NAME = "unknown-worker"
+
+
+class OCRResultPayload(BaseModel):
+    raw_json: Any = None
+    raw_text: Optional[str] = None
+    model_name: Optional[str] = None
+    duration_ms: Optional[int] = None
+    confidence: Optional[float] = None
+
+
+class OCRFailPayload(BaseModel):
+    error_message: str
 
 
 @asynccontextmanager
@@ -41,6 +58,81 @@ def health_check():
     return {"status": "ok"}
 
 
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+
+    return token.strip()
+
+
+def require_worker_token(
+    x_worker_token: Optional[str] = Header(default=None, alias="X-Worker-Token"),
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    expected_token = os.getenv("WORKER_TOKEN") or "change-me"
+    supplied_token = (x_worker_token or "").strip() or _extract_bearer_token(authorization)
+
+    if not supplied_token or not compare_digest(supplied_token, expected_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing worker token.",
+        )
+
+
+def _normalize_worker_name(worker_name: Optional[str]) -> str:
+    if not worker_name:
+        return DEFAULT_WORKER_NAME
+
+    stripped = worker_name.strip()
+    return stripped or DEFAULT_WORKER_NAME
+
+
+def _serialize_raw_json(raw_json: Any) -> Optional[str]:
+    if raw_json is None:
+        return None
+
+    if isinstance(raw_json, str):
+        return raw_json
+
+    return json.dumps(raw_json, ensure_ascii=False, separators=(",", ":"))
+
+
+def _job_response(job: OCRJob) -> dict:
+    return {
+        "ocr_job_id": job.id,
+        "question_id": job.question_id,
+        "asset_id": job.asset_id,
+        "file_path": job.asset.file_path if job.asset else None,
+        "status": job.status,
+        "worker_name": job.worker_name,
+        "model_name": job.model_name,
+        "raw_json": job.raw_json,
+        "raw_text": job.raw_text,
+        "confidence": job.confidence,
+        "duration_ms": job.duration_ms,
+        "error_message": job.error_message,
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "finished_at": job.finished_at,
+        "updated_at": job.updated_at,
+    }
+
+
+def _get_ocr_job_or_404(db: Session, job_id: int) -> OCRJob:
+    job = db.get(OCRJob, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="OCR job not found.",
+        )
+
+    return job
+
+
 def _validate_upload(file: UploadFile) -> str:
     content_type = file.content_type or ""
     filename = file.filename or ""
@@ -59,6 +151,132 @@ def _validate_upload(file: UploadFile) -> str:
         )
 
     return extension
+
+
+@app.get("/api/ocr/jobs/next", dependencies=[Depends(require_worker_token)])
+def claim_next_ocr_job(
+    worker_name: Optional[str] = Header(default=None, alias="X-Worker-Name"),
+    db: Session = Depends(get_db),
+):
+    normalized_worker_name = _normalize_worker_name(worker_name)
+
+    while True:
+        pending_job = (
+            db.query(OCRJob)
+            .filter(OCRJob.status == "pending")
+            .order_by(OCRJob.created_at.asc(), OCRJob.id.asc())
+            .first()
+        )
+
+        if not pending_job:
+            return {"job": None}
+
+        pending_job_id = pending_job.id
+        now = utc_now()
+        updated_count = (
+            db.query(OCRJob)
+            .filter(OCRJob.id == pending_job_id, OCRJob.status == "pending")
+            .update(
+                {
+                    OCRJob.status: "running",
+                    OCRJob.worker_name: normalized_worker_name,
+                    OCRJob.started_at: now,
+                    OCRJob.updated_at: now,
+                },
+                synchronize_session=False,
+            )
+        )
+
+        if updated_count:
+            db.commit()
+            job = _get_ocr_job_or_404(db, pending_job_id)
+            return {"job": _job_response(job)}
+
+        db.rollback()
+
+
+@app.get("/api/ocr/jobs/{job_id}", dependencies=[Depends(require_worker_token)])
+def get_ocr_job(job_id: int, db: Session = Depends(get_db)):
+    job = _get_ocr_job_or_404(db, job_id)
+    return {"job": _job_response(job)}
+
+
+@app.post("/api/ocr/jobs/{job_id}/heartbeat", dependencies=[Depends(require_worker_token)])
+def heartbeat_ocr_job(job_id: int, db: Session = Depends(get_db)):
+    job = _get_ocr_job_or_404(db, job_id)
+    job.updated_at = utc_now()
+    db.commit()
+    db.refresh(job)
+    return {"job": _job_response(job)}
+
+
+@app.post("/api/ocr/jobs/{job_id}/result", dependencies=[Depends(require_worker_token)])
+def submit_ocr_result(
+    job_id: int,
+    payload: OCRResultPayload,
+    db: Session = Depends(get_db),
+):
+    job = _get_ocr_job_or_404(db, job_id)
+    now = utc_now()
+
+    job.status = "succeeded"
+    job.finished_at = now
+    job.updated_at = now
+    job.raw_json = _serialize_raw_json(payload.raw_json)
+    job.raw_text = payload.raw_text
+    job.model_name = payload.model_name
+    job.duration_ms = payload.duration_ms
+    job.confidence = payload.confidence
+    job.error_message = None
+
+    question = db.get(Question, job.question_id)
+    if question:
+        question.raw_text = payload.raw_text
+        question.updated_at = now
+
+    db.commit()
+    db.refresh(job)
+    return {"job": _job_response(job)}
+
+
+@app.post("/api/ocr/jobs/{job_id}/fail", dependencies=[Depends(require_worker_token)])
+def fail_ocr_job(
+    job_id: int,
+    payload: OCRFailPayload,
+    db: Session = Depends(get_db),
+):
+    job = _get_ocr_job_or_404(db, job_id)
+    now = utc_now()
+
+    job.status = "failed"
+    job.finished_at = now
+    job.updated_at = now
+    job.error_message = payload.error_message
+
+    db.commit()
+    db.refresh(job)
+    return {"job": _job_response(job)}
+
+
+@app.post("/api/ocr/jobs/{job_id}/retry", dependencies=[Depends(require_worker_token)])
+def retry_ocr_job(job_id: int, db: Session = Depends(get_db)):
+    job = _get_ocr_job_or_404(db, job_id)
+    if job.status != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed OCR jobs can be retried.",
+        )
+
+    now = utc_now()
+    job.status = "pending"
+    job.error_message = None
+    job.started_at = None
+    job.finished_at = None
+    job.updated_at = now
+
+    db.commit()
+    db.refresh(job)
+    return {"job": _job_response(job)}
 
 
 @app.post("/api/questions/upload")
