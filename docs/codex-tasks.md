@@ -13,16 +13,22 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - current backend entrypoint is `apps.api.app.main:app`
 - project documentation and `AGENTS.md` created
 - SQLite data model and database initialization logic added
+- image upload API added at `POST /api/questions/upload`
+
+## Current Task
+
+- verify the image upload API
+- confirm uploaded files are ignored by Git
+- confirm uploaded records create `Question`, `QuestionAsset`, and pending `OCRJob` rows
 
 ## Next Tasks
 
 Recommended order:
 
-1. image upload API
-2. OCR job table API
-3. OCR Worker mock mode
-4. PaddleOCR Worker mode
-5. Vue 3 + Vite frontend
+1. OCR job table API
+2. OCR Worker mock mode
+3. PaddleOCR Worker mode
+4. Vue 3 + Vite frontend
 
 ## Task Boundaries
 
@@ -44,5 +50,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please implement the first image upload API for WrongBook using the existing FastAPI app and SQLite data model. Store image files on disk, store only paths in SQLite, do not implement OCR processing, do not create a frontend, and include verification steps.
+Please implement the first OCR job API for WrongBook using the existing FastAPI app and SQLite data model. Do not implement OCR processing, do not install PaddleOCR, do not create a frontend, and include verification steps.
 ```

@@ -4,7 +4,7 @@ WrongBook is a personal wrong-question collection and review tool. The goal is t
 
 ## Current Status
 
-The project is currently a lightweight FastAPI backend in `apps/api`. It has basic health endpoints plus the first SQLite/SQLAlchemy data model and database initialization logic. It does not yet include image upload, OCR business APIs, an OCR worker, or a frontend.
+The project is currently a lightweight FastAPI backend in `apps/api`. It has basic health endpoints, the first SQLite/SQLAlchemy data model, database initialization logic, and a local image upload API. It does not yet include OCR business processing, an OCR worker, PaddleOCR, or a frontend.
 
 ## Local API Startup
 
@@ -35,10 +35,35 @@ python -m apps.api.app.init_db
 
 The FastAPI app also initializes tables during startup. The real database file `data/app.db` must not be committed. The repository keeps only `data/.gitkeep` as an empty directory placeholder.
 
+## Uploads
+
+Uploaded image files are stored on disk under `UPLOAD_DIR`, which defaults to:
+
+```env
+UPLOAD_DIR=./data/uploads
+```
+
+Supported image types:
+
+- `image/jpeg` with `.jpg` or `.jpeg`
+- `image/png` with `.png`
+- `image/webp` with `.webp`
+
+Maximum file size: 20 MB.
+
+Example upload:
+
+```powershell
+curl.exe -X POST "http://127.0.0.1:8000/api/questions/upload" -F "file=@D:\path\to\question.jpg;type=image/jpeg"
+```
+
+The upload API stores the image path in SQLite, creates a draft `Question`, creates an original `QuestionAsset`, and creates a pending `OCRJob`. It does not run OCR.
+
 ## API Endpoints
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
 - `GET /health` returns `{"status":"ok"}`
+- `POST /api/questions/upload` uploads one image and creates a pending OCR job
 
 ## Repository Safety
 
@@ -49,6 +74,7 @@ Keep these out of Git:
 - `.venv/`
 - `.env`
 - `data/app.db`
+- `data/uploads/`
 - `*.db`
 - `*.sqlite`
 - `*.sqlite3`
