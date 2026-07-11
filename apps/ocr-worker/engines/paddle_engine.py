@@ -3,7 +3,10 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from io import BytesIO
 from typing import Any
+
+from PIL import Image, ImageOps
 import unicodedata
 
 from .base import OCREngine, OCREngineError, OCRResult
@@ -26,18 +29,45 @@ class PaddleOCREngine(OCREngine):
         self._ocr = None
 
     def recognize(self, image_bytes: bytes, job: dict) -> OCRResult:
-        suffix = self._suffix_from_job(job)
+        prepared_bytes, preprocessing = self._prepare_image(image_bytes)
         tmp_path = None
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                tmp.write(image_bytes)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(prepared_bytes)
                 tmp_path = Path(tmp.name)
 
             prediction = self._get_ocr().predict(str(tmp_path))
-            return self._prediction_to_result(prediction)
+            result = self._prediction_to_result(prediction)
+            result.raw_json["preprocessing"] = preprocessing
+            return result
         finally:
             if tmp_path and tmp_path.exists():
                 tmp_path.unlink()
+
+    @staticmethod
+    def _prepare_image(image_bytes: bytes) -> tuple[bytes, dict[str, Any]]:
+        try:
+            with Image.open(BytesIO(image_bytes)) as source:
+                source.load()
+                original_size = list(source.size)
+                orientation = source.getexif().get(274)
+                prepared = ImageOps.exif_transpose(source)
+                prepared_size = list(prepared.size)
+                if prepared.mode not in {"RGB", "L"}:
+                    prepared = prepared.convert("RGB")
+                output = BytesIO()
+                prepared.save(output, format="PNG")
+        except Exception as exc:
+            raise OCREngineError(f"Failed to decode OCR image: {exc}") from exc
+
+        return output.getvalue(), {
+            "mode": "original",
+            "exif_orientation": orientation,
+            "exif_transposed": orientation not in {None, 1},
+            "original_size": original_size,
+            "prepared_size": prepared_size,
+            "prepared_format": "PNG",
+        }
 
     def _get_ocr(self):
         if self._ocr is not None:

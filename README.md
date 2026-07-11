@@ -233,3 +233,7 @@ Before a release, run the real-device checklist in `docs/mobile-acceptance.md`. 
 On phone-width screens the Web/PWA uses a bottom directory navigation with Home, Library, Review, and Statistics views. Home provides separate camera capture and gallery selection inputs so browsers that force camera capture still allow existing photos to be selected through the gallery control. Desktop keeps the full dashboard layout.
 
 - The mobile gallery picker supports multi-select and uploads selected images sequentially. Camera capture remains single-image.
+
+## OCR evaluation
+
+Run `python scripts/evaluate_ocr.py <image-or-directory>` on the Windows OCR laptop. The report is written under `data/ocr-evaluation/` by default and remains outside Git. PaddleOCR now applies EXIF orientation before recognition and records preprocessing metadata in `raw_json`.

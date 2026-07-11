@@ -44,6 +44,7 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - mobile-width overflow regression fixed and PWA acceptance checklist added
 - safe OCR re-recognition from the stored original image added
 - mobile bottom directory navigation and separate camera/gallery inputs added
+- OCR evaluation script and EXIF orientation preprocessing added
 
 ## Current Task
 

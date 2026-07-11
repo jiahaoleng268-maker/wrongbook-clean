@@ -181,3 +181,9 @@ At widths up to 620 CSS pixels, top-level panels become four directory views con
 ## Batch gallery upload
 
 The gallery input supports selecting multiple images. The browser uploads them sequentially through the existing single-image endpoint, reports per-batch progress, continues after individual failures, and refreshes the library once after the batch. Camera capture remains single-image. This avoids increasing API memory pressure on the low-resource server.
+
+## OCR evaluation samples
+
+Keep real OCR images and matching `.txt` ground truth files under `data/ocr-evaluation/`, which is ignored by Git. `scripts/evaluate_ocr.py` accepts one image or a directory, initializes the selected engine once, and writes timing, confidence, recognized text, preprocessing metadata, and optional text similarity to JSON.
+
+The first local baseline used six representative pages rendered from a user-provided calculus exercise PDF plus one phone screenshot. General Chinese text achieved high PaddleOCR confidence, while fractions, radicals, superscripts, integrals, and two-dimensional formula structure remained the dominant errors. Keep the PDF and rendered samples local and out of Git.
