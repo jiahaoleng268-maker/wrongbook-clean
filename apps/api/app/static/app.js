@@ -10,6 +10,8 @@
     questionTotal: 0,
     historyOffset: 0,
     historyTotal: 0,
+    selectedImageFile: null,
+    activeView: "home",
   };
 
   const statusLabels = {
@@ -32,7 +34,9 @@
 
   const elements = {
     uploadForm: $("uploadForm"),
-    imageInput: $("imageInput"),
+    cameraInput: $("cameraInput"),
+    galleryInput: $("galleryInput"),
+    selectedImageName: $("selectedImageName"),
     uploadButton: $("uploadButton"),
     uploadState: $("uploadState"),
     refreshButton: $("refreshButton"),
@@ -107,7 +111,8 @@
     copyRawButton: $("copyRawButton"),
     rerunOcrButton: $("rerunOcrButton"),
     saveState: $("saveState"),
-    fileLabel: document.querySelector(".file-picker span"),
+    appViews: Array.from(document.querySelectorAll(".app-view")),
+    bottomNavItems: Array.from(document.querySelectorAll(".bottom-nav-item")),
   };
 
   function setStateText(element, message, type = "") {
@@ -633,7 +638,7 @@
 
   async function handleUpload(event) {
     event.preventDefault();
-    const file = elements.imageInput.files[0];
+    const file = state.selectedImageFile;
     if (!file) {
       setStateText(elements.uploadState, "请选择图片", "error");
       return;
@@ -730,20 +735,20 @@
   async function handleQuestionImport() {
     const file = elements.questionImportInput.files[0];
     if (!file) {
-      setStateText(elements.questionImportState, "???? WrongBook JSON ???", true);
+      setStateText(elements.questionImportState, "\u8bf7\u5148\u9009\u62e9 WrongBook JSON \u6587\u4ef6\u3002", true);
       return;
     }
     const formData = new FormData();
     formData.append("file", file);
     elements.importQuestionsButton.disabled = true;
-    setStateText(elements.questionImportState, "?????");
+    setStateText(elements.questionImportState, "\u6b63\u5728\u5bfc\u5165...");
     try {
       const response = await fetch("/api/questions/import", { method: "POST", body: formData });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "????");
+      if (!response.ok) throw new Error(payload.detail || "\u7b49\u5f85\u56fe\u7247");
       elements.questionImportInput.value = "";
-      elements.questionImportFileLabel.textContent = "?? WrongBook JSON";
-      setStateText(elements.questionImportState, `??? ${payload.imported_count} ?????`);
+      elements.questionImportFileLabel.textContent = "\u9009\u62e9 WrongBook JSON";
+      setStateText(elements.questionImportState, `\u5df2\u5bfc\u5165 ${payload.imported_count} \u9053\u65b0\u9898\u76ee\u3002`);
       state.questionOffset = 0;
       await Promise.all([loadQuestions({ selectFirst: true }), loadQuestionStats(), loadKnowledgePoints(), loadMistakeTagSuggestions()]);
     } catch (error) {
@@ -838,6 +843,27 @@
     }
   }
 
+  function switchView(viewName) {
+    state.activeView = viewName;
+    elements.appViews.forEach((view) => {
+      view.classList.toggle("is-mobile-active", view.dataset.view === viewName);
+    });
+    elements.bottomNavItems.forEach((item) => {
+      const active = item.dataset.targetView === viewName;
+      item.classList.toggle("is-active", active);
+      if (active) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function selectImageSource(file) {
+    state.selectedImageFile = file || null;
+    elements.selectedImageName.textContent = file ? file.name : "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
+    elements.uploadButton.disabled = !file;
+    setStateText(elements.uploadState, file ? "\u56fe\u7247\u5df2\u9009\u62e9\uff0c\u53ef\u4ee5\u4e0a\u4f20" : "\u7b49\u5f85\u56fe\u7247", file ? "success" : "");
+  }
+
   function setupEvents() {
     elements.uploadForm.addEventListener("submit", handleUpload);
     elements.detailForm.addEventListener("submit", handleSave);
@@ -848,8 +874,8 @@
     elements.importQuestionsButton.addEventListener("click", handleQuestionImport);
     elements.questionImportInput.addEventListener("change", () => {
       const file = elements.questionImportInput.files[0];
-      elements.questionImportFileLabel.textContent = file ? file.name : "?? WrongBook JSON";
-      setStateText(elements.questionImportState, file ? "JSON ??????" : "");
+      elements.questionImportFileLabel.textContent = file ? file.name : "\u9009\u62e9 WrongBook JSON";
+      setStateText(elements.questionImportState, file ? "JSON \u6587\u4ef6\u5df2\u9009\u62e9\u3002" : "");
     });
     elements.exportJsonButton.addEventListener("click", () => downloadQuestionExport("json"));
     elements.exportMarkdownButton.addEventListener("click", () => downloadQuestionExport("markdown"));
@@ -884,10 +910,20 @@
 
     elements.statusFilter.addEventListener("change", () => { state.questionOffset = 0; loadQuestions(); });
 
-    elements.imageInput.addEventListener("change", () => {
-      const file = elements.imageInput.files[0];
-      elements.fileLabel.textContent = file ? file.name : "拍照或选择图片";
-      setStateText(elements.uploadState, file ? "图片已选择" : "等待图片");
+    elements.cameraInput.addEventListener("change", () => {
+      const file = elements.cameraInput.files[0];
+      if (file) elements.galleryInput.value = "";
+      selectImageSource(file);
+    });
+
+    elements.galleryInput.addEventListener("change", () => {
+      const file = elements.galleryInput.files[0];
+      if (file) elements.cameraInput.value = "";
+      selectImageSource(file);
+    });
+
+    elements.bottomNavItems.forEach((item) => {
+      item.addEventListener("click", () => switchView(item.dataset.targetView));
     });
 
     elements.rerunOcrButton.addEventListener("click", handleRerunOcr);
@@ -938,6 +974,7 @@
   }
 
   setupEvents();
+  switchView(state.activeView);
   registerServiceWorker();
   loadQuestions({ selectFirst: true });
   loadQuestionStats();

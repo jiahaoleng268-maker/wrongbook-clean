@@ -164,6 +164,10 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("text/html", content_type)
         self.assertIn("WrongBook", html)
         self.assertIn('id="uploadForm"', html)
+        self.assertIn('id="cameraInput"', html)
+        self.assertIn('id="galleryInput"', html)
+        self.assertIn('class="bottom-nav"', html)
+        self.assertIn('data-target-view="library"', html)
         self.assertIn('id="knowledgePointList"', html)
         self.assertIn('id="createKnowledgePointButton"', html)
         self.assertIn('id="mistakeTagsInput"', html)
@@ -198,7 +202,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v2', service_worker)
+        self.assertIn('wrongbook-web-v3', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)
@@ -224,6 +228,9 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("/reviews", javascript)
         self.assertIn("/complete", javascript)
         self.assertIn("serviceWorker", javascript)
+        self.assertIn("switchView", javascript)
+        self.assertIn("selectedImageFile", javascript)
+        self.assertIn("galleryInput", javascript)
 
         manifest = self.request_json("GET", "/app/static/manifest.webmanifest")
         self.assertEqual(manifest["short_name"], "WrongBook")
