@@ -1032,3 +1032,9 @@ body { padding-left: 220px; background: #f4f6fa; }
 @media (max-width: 720px) { .asset-upload-controls { align-items: stretch; flex-direction: column; } }
 .table-cell { color: #536274; font-size: .85rem; }
 #bulkKnowledgeSelect { min-height: 42px; max-height: 90px; }
+
+.batch-split-actions { display: flex; align-items: center; gap: 10px; }
+.question-candidates { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.candidate-card { display: grid; gap: 10px; padding: 14px; border: 1px solid #dbe3ef; border-radius: 14px; background: #fff; }
+.candidate-header { display: flex; align-items: center; justify-content: space-between; }
+.candidate-card textarea { min-height: 180px; font-family: Consolas, monospace; line-height: 1.55; }

@@ -301,6 +301,34 @@ class WrongBookIntegrationTest(unittest.TestCase):
         sources = self.request_json("GET", "/api/sources")["items"]
         self.assertEqual(sources[0]["chapters"][0]["name"], "函数极限")
 
+    def test_batch_manual_import_and_traceability(self) -> None:
+        source = self.request_json("POST", "/api/sources", payload={"name": "批量导入教材"})["source"]
+        chapter = self.request_json("POST", "/api/chapters", payload={"source_id": source["source_id"], "name": "极限"})["chapter"]
+        result = self.request_json(
+            "POST",
+            "/api/questions/batch-manual",
+            payload={
+                "raw_content": "例18 求极限\n解答\n例19 求另一个极限",
+                "original_filename": "page-18.png",
+                "subject": "高等数学",
+                "source_id": source["source_id"],
+                "chapter_id": chapter["chapter_id"],
+                "source_page": "18",
+                "items": [
+                    {"title": "例18", "content": "例18 求极限\n解答"},
+                    {"title": "例19", "content": "例19 求另一个极限"},
+                ],
+            },
+        )
+        self.assertEqual(result["created_count"], 2)
+        batches = self.request_json("GET", "/api/question-import-batches")["items"]
+        self.assertEqual(batches[0]["batch_id"], result["batch_id"])
+        self.assertEqual(batches[0]["question_count"], 2)
+        detail = self.request_json("GET", f"/api/questions/{result['question_ids'][0]}")["question"]
+        self.assertEqual(detail["source_id"], source["source_id"])
+        self.assertEqual(detail["chapter_id"], chapter["chapter_id"])
+        self.assertEqual(detail["source_page"], "18")
+
     def test_manual_paddle_import_without_ocr_job(self) -> None:
         boundary = f"----wrongbook-manual-{time.time_ns()}"
         parts = [
@@ -339,6 +367,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn('id="uploadForm"', html)
         self.assertIn('id="cameraInput"', html)
         self.assertIn('id="paddleTextInput"', html)
+        self.assertIn('id="questionCandidates"', html)
         self.assertIn('class="desktop-sidebar"', html)
         self.assertIn('id="sourceTree"', html)
         self.assertIn('id="answerTextInput"', html)
@@ -381,7 +410,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v12', service_worker)
+        self.assertIn('wrongbook-web-v13', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

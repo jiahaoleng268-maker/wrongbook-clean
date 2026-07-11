@@ -18,6 +18,7 @@
     sourceFilterId: null,
     chapterFilterId: null,
     selectedQuestionIds: new Set(),
+    questionCandidates: [],
     smartFilter: "",
     questionView: "card",
     sortBy: "created_at",
@@ -54,6 +55,11 @@
     manualSourceInput: $("manualSourceInput"),
     manualTypeInput: $("manualTypeInput"),
     paddleTextInput: $("paddleTextInput"),
+    splitQuestionsButton: $("splitQuestionsButton"),
+    clearCandidatesButton: $("clearCandidatesButton"),
+    questionCandidates: $("questionCandidates"),
+    candidateState: $("candidateState"),
+    createBatchButton: $("createBatchButton"),
     manualSourceSelect: $("manualSourceSelect"),
     manualChapterSelect: $("manualChapterSelect"),
     manualSourcePageInput: $("manualSourcePageInput"),
@@ -925,6 +931,47 @@
     }
   }
 
+  function splitPaddleQuestions(content) {
+    const normalized = content.replace(/\r\n/g, "\n").trim();
+    if (!normalized) return [];
+    const marker = /^(?:\s*)(\[?例\s*\d+\]?|第\s*\d+\s*题|题\s*\d+|\d+[\.、）)]|\(\d+\)|【\s*\d+\s*】)(?:\s*)/gm;
+    const matches = Array.from(normalized.matchAll(marker));
+    if (matches.length < 2) return [{ title: "导入题目 1", content: normalized }];
+    return matches.map((match, index) => {
+      const start = match.index;
+      const end = index + 1 < matches.length ? matches[index + 1].index : normalized.length;
+      return { title: match[1].replace(/\s+/g, " ").trim(), content: normalized.slice(start, end).trim() };
+    });
+  }
+
+  function renderQuestionCandidates() {
+    elements.questionCandidates.replaceChildren();
+    state.questionCandidates.forEach((candidate, index) => {
+      const card = document.createElement("article"); card.className = "candidate-card";
+      const header = document.createElement("div"); header.className = "candidate-header";
+      const number = document.createElement("strong"); number.textContent = `候选 ${index + 1}`;
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "danger-button"; remove.textContent = "移除";
+      remove.addEventListener("click", () => { state.questionCandidates.splice(index, 1); renderQuestionCandidates(); });
+      header.append(number, remove);
+      const title = document.createElement("input"); title.value = candidate.title; title.placeholder = "题目标题";
+      title.addEventListener("input", () => { candidate.title = title.value; });
+      const area = document.createElement("textarea"); area.value = candidate.content; area.rows = 8;
+      area.addEventListener("input", () => { candidate.content = area.value; });
+      card.append(header, title, area); elements.questionCandidates.append(card);
+    });
+    elements.createBatchButton.disabled = state.questionCandidates.length === 0;
+    setStateText(elements.candidateState, state.questionCandidates.length ? `已拆分 ${state.questionCandidates.length} 道候选题` : "暂无候选题");
+  }
+
+  async function createQuestionBatch() {
+    const items = state.questionCandidates.map((item) => ({ title: item.title.trim() || null, content: item.content.trim(), question_type: elements.manualTypeInput.value.trim() || null }));
+    if (!items.length || items.some((item) => !item.content)) { setStateText(elements.candidateState, "候选题不能为空", "error"); return; }
+    elements.createBatchButton.disabled = true;
+    try {
+      const result = await requestJSON("/api/questions/batch-manual", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ raw_content: elements.paddleTextInput.value, original_filename: elements.galleryInput.files[0]?.name || null, subject: elements.manualSubjectInput.value.trim() || null, source: elements.manualSourceInput.value.trim() || "PaddleOCR Web", source_id: elements.manualSourceSelect.value ? Number(elements.manualSourceSelect.value) : null, chapter_id: elements.manualChapterSelect.value ? Number(elements.manualChapterSelect.value) : null, source_page: elements.manualSourcePageInput.value.trim() || null, items }) });
+      state.questionCandidates = []; renderQuestionCandidates(); await Promise.all([loadQuestions(), loadQuestionStats()]); switchView("library"); if (result.question_ids.length) await selectQuestion(result.question_ids[0]); setStateText(elements.uploadState, `已批量创建 ${result.created_count} 道题`, "success");
+    } catch (error) { setStateText(elements.candidateState, error.message, "error"); } finally { elements.createBatchButton.disabled = state.questionCandidates.length === 0; }
+  }
   async function handleUpload(event) {
     event.preventDefault();
     const content = elements.paddleTextInput.value.trim();
@@ -1170,6 +1217,9 @@
 
   function setupEvents() {
     elements.uploadForm.addEventListener("submit", handleUpload);
+    elements.splitQuestionsButton.addEventListener("click", () => { state.questionCandidates = splitPaddleQuestions(elements.paddleTextInput.value); renderQuestionCandidates(); });
+    elements.clearCandidatesButton.addEventListener("click", () => { state.questionCandidates = []; renderQuestionCandidates(); });
+    elements.createBatchButton.addEventListener("click", createQuestionBatch);
     elements.detailForm.addEventListener("submit", handleSave);
     elements.refreshButton.addEventListener("click", () => { loadQuestions(); loadQuestionStats(); loadDueReviews(); loadReviewStats(); });
     elements.scheduleReviewButton.addEventListener("click", handleScheduleReview);

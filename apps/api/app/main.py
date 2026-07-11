@@ -25,6 +25,7 @@ from apps.api.app.models import (
     OCRJob,
     Question,
     QuestionAsset,
+    QuestionImportBatch,
     Review,
     Source,
     question_knowledge_points,
@@ -128,6 +129,22 @@ class QuestionBulkUpdatePayload(BaseModel):
     status: Optional[str] = None
     knowledge_point_ids: list[int] = []
     mistake_tag_names: list[str] = []
+
+class BatchQuestionItemPayload(BaseModel):
+    title: Optional[str] = None
+    content: str
+    question_type: Optional[str] = None
+
+
+class BatchQuestionCreatePayload(BaseModel):
+    raw_content: str
+    original_filename: Optional[str] = None
+    subject: Optional[str] = None
+    source: Optional[str] = None
+    source_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    source_page: Optional[str] = None
+    items: list[BatchQuestionItemPayload]
 
 class AssetUpdatePayload(BaseModel):
     asset_type: str
@@ -1735,6 +1752,58 @@ def bulk_update_questions(payload: QuestionBulkUpdatePayload, db: Session = Depe
         question.updated_at = utc_now()
     db.commit()
     return {"updated_count": len(questions), "question_ids": question_ids}
+
+@app.post("/api/questions/batch-manual", status_code=status.HTTP_201_CREATED)
+def create_manual_question_batch(payload: BatchQuestionCreatePayload, db: Session = Depends(get_db)):
+    raw_content = payload.raw_content.strip()
+    if not raw_content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="raw_content is required.")
+    if not payload.items or len(payload.items) > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batch must contain between 1 and 100 questions.")
+    if payload.source_id is not None and db.get(Source, payload.source_id) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_id.")
+    if payload.chapter_id is not None:
+        chapter = db.get(Chapter, payload.chapter_id)
+        if chapter is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chapter_id.")
+        if payload.source_id is not None and chapter.source_id != payload.source_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter does not belong to the selected source.")
+    batch = QuestionImportBatch(
+        source_id=payload.source_id,
+        chapter_id=payload.chapter_id,
+        source_page=payload.source_page.strip() if payload.source_page else None,
+        original_filename=payload.original_filename.strip() if payload.original_filename else None,
+        raw_content=raw_content,
+        question_count=len(payload.items),
+    )
+    db.add(batch); db.flush()
+    questions = []
+    for index, item in enumerate(payload.items, start=1):
+        content = item.content.strip()
+        if not content:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Question {index} content is empty.")
+        question = Question(
+            title=item.title.strip() if item.title else f"导入题目 {index}",
+            subject=payload.subject.strip() if payload.subject else None,
+            source=payload.source.strip() if payload.source else "PaddleOCR Web",
+            source_id=payload.source_id,
+            chapter_id=payload.chapter_id,
+            source_page=payload.source_page.strip() if payload.source_page else None,
+            question_type=item.question_type.strip() if item.question_type else None,
+            raw_text=content,
+            corrected_text=content,
+            import_batch_id=batch.id,
+            status="draft",
+        )
+        db.add(question); questions.append(question)
+    db.commit()
+    return {"batch_id": batch.id, "created_count": len(questions), "question_ids": [question.id for question in questions]}
+
+
+@app.get("/api/question-import-batches")
+def list_question_import_batches(limit: int = Query(default=20, ge=1, le=100), db: Session = Depends(get_db)):
+    batches = db.query(QuestionImportBatch).order_by(QuestionImportBatch.created_at.desc(), QuestionImportBatch.id.desc()).limit(limit).all()
+    return {"items": [{"batch_id": batch.id, "source_id": batch.source_id, "chapter_id": batch.chapter_id, "source_page": batch.source_page, "original_filename": batch.original_filename, "raw_content": batch.raw_content, "question_count": batch.question_count, "created_at": batch.created_at} for batch in batches]}
 
 @app.post("/api/questions/manual", status_code=status.HTTP_201_CREATED)
 async def create_manual_question(

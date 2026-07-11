@@ -61,6 +61,7 @@ def _apply_lightweight_migrations() -> None:
         "source_id": "INTEGER",
         "chapter_id": "INTEGER",
         "source_page": "VARCHAR(50)",
+        "import_batch_id": "INTEGER",
         "answer_text": "TEXT",
         "solution_text": "TEXT",
         "personal_solution": "TEXT",
@@ -75,6 +76,7 @@ def _apply_lightweight_migrations() -> None:
                 connection.execute(text(f"ALTER TABLE questions ADD COLUMN {column_name} {column_type}"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_source_id ON questions (source_id)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_chapter_id ON questions (chapter_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_import_batch_id ON questions (import_batch_id)"))
 
 def get_db():
     db = SessionLocal()

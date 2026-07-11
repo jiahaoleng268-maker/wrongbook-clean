@@ -272,3 +272,6 @@ KaTeX JavaScript, CSS, and fonts are stored under `apps/api/app/static/vendor/ka
 ## R2 table sorting and bulk metadata
 
 The question pane provides field-based sorting by title, subject, type, difficulty, status, page, and creation or update time. Table view shows separate source, chapter, type, difficulty, and status values. Bulk organization can append knowledge points and mistake tags without replacing existing metadata.
+## PaddleOCR batch splitting
+
+The import workspace can split a full PaddleOCR page into editable question candidates using common markers such as `例18`, `第2题`, `题3`, numbered list markers, and bracketed numbers. Candidates can be renamed, edited, or removed before one transactional batch creates all questions. Each batch preserves the original page text, filename, source, chapter, page, timestamp, and created-question count for traceability.

@@ -707,3 +707,6 @@ Assets referenced by OCR history return `409` on deletion to preserve historical
 ## Question sorting and bulk metadata
 
 `GET /api/questions` accepts `sort_by` and `sort_order`. Sort fields are restricted to `created_at`, `updated_at`, `title`, `subject`, `question_type`, `difficulty`, `status`, and `source_page`. Bulk update accepts `knowledge_point_ids` and `mistake_tag_names`; these values are appended to existing question metadata rather than replacing it.
+## PaddleOCR batch import
+
+`POST /api/questions/batch-manual` transactionally creates 1–100 questions and one `QuestionImportBatch`. Empty candidates or invalid source/chapter relationships reject the entire batch. `GET /api/question-import-batches` lists recent import records with their original PaddleOCR content and metadata.

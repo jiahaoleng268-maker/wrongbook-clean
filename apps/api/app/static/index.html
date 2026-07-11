@@ -34,10 +34,11 @@
             <label><span>题型</span><input id="manualTypeInput" type="text" maxlength="100" placeholder="函数极限" /></label><label><span>资料</span><select id="manualSourceSelect"><option value="">未选择</option></select></label><label><span>章节</span><select id="manualChapterSelect"><option value="">未选择</option></select></label><label><span>页码</span><input id="manualSourcePageInput" type="text" maxlength="50" /></label>
           </div>
           <label class="paddle-text-field"><span>PaddleOCR 文本 / Markdown / LaTeX</span><textarea id="paddleTextInput" rows="12" placeholder="在网页版 PaddleOCR 复制解析结果，然后粘贴到这里。"></textarea></label>
+          <div class="batch-split-actions"><button id="splitQuestionsButton" class="ghost-button" type="button">按题号自动拆题</button><button id="clearCandidatesButton" class="ghost-button" type="button">清空候选</button><span id="candidateState" class="state-text"></span></div><div id="questionCandidates" class="question-candidates"></div>
           <div class="desktop-import-footer">
             <label class="source-picker gallery-picker"><strong>附加原题图片（可选）</strong><span id="selectedImageName">尚未选择图片</span><input id="galleryInput" type="file" accept="image/*" /></label>
             <input id="cameraInput" type="file" accept="image/*" hidden />
-            <button id="uploadButton" class="primary-button" type="submit">创建错题</button>
+            <button id="uploadButton" class="primary-button" type="submit">创建单道题</button><button id="createBatchButton" class="primary-button" type="button" disabled>批量创建候选题</button>
           </div>
         </form>
       </section>

@@ -49,6 +49,7 @@ class Question(Base):
     source_id = Column(Integer, ForeignKey("sources.id"), nullable=True, index=True)
     chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=True, index=True)
     source_page = Column(String(50), nullable=True)
+    import_batch_id = Column(Integer, ForeignKey("question_import_batches.id"), nullable=True, index=True)
     answer_text = Column(Text, nullable=True)
     solution_text = Column(Text, nullable=True)
     personal_solution = Column(Text, nullable=True)
@@ -69,6 +70,7 @@ class Question(Base):
         secondary=question_knowledge_points,
         back_populates="questions",
     )
+    import_batch = relationship("QuestionImportBatch", back_populates="questions")
     source_record = relationship("Source", back_populates="questions")
     chapter = relationship("Chapter", back_populates="questions")
     mistake_tags = relationship(
@@ -112,6 +114,21 @@ class Chapter(Base):
     parent = relationship("Chapter", remote_side=[id], back_populates="children")
     children = relationship("Chapter", back_populates="parent")
     questions = relationship("Question", back_populates="chapter")
+
+class QuestionImportBatch(Base):
+    __tablename__ = "question_import_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_id = Column(Integer, ForeignKey("sources.id"), nullable=True, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=True, index=True)
+    source_page = Column(String(50), nullable=True)
+    import_type = Column(String(50), nullable=False, default="paddleocr_paste")
+    original_filename = Column(String(255), nullable=True)
+    raw_content = Column(Text, nullable=False)
+    question_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    questions = relationship("Question", back_populates="import_batch")
 
 class QuestionAsset(Base):
     __tablename__ = "question_assets"
