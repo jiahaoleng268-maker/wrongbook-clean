@@ -192,6 +192,21 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertNotEqual(detail["raw_text"], r"\frac{1}{x}")
         formula_jobs = [job for job in detail["ocr_jobs"] if job["engine_name"] == "formula"]
         self.assertEqual(formula_jobs[-1]["raw_text"], r"\frac{1}{x}")
+    def test_smart_filters_and_source_maintenance(self) -> None:
+        source = self.request_json("POST", "/api/sources", payload={"name": "待重命名资料"})["source"]
+        chapter = self.request_json("POST", "/api/chapters", payload={"source_id": source["source_id"], "name": "旧章节"})["chapter"]
+        renamed_source = self.request_json("PATCH", f"/api/sources/{source['source_id']}", payload={"name": "新资料"})["source"]
+        renamed_chapter = self.request_json("PATCH", f"/api/chapters/{chapter['chapter_id']}", payload={"name": "新章节"})["chapter"]
+        self.assertEqual(renamed_source["name"], "新资料")
+        self.assertEqual(renamed_chapter["name"], "新章节")
+        upload = self.upload_image("smart-filter.png")
+        unclassified = self.request_json("GET", "/api/questions?smart_filter=unclassified")
+        missing_answer = self.request_json("GET", "/api/questions?smart_filter=missing_answer")
+        self.assertIn(upload["question_id"], [item["question_id"] for item in unclassified["items"]])
+        self.assertIn(upload["question_id"], [item["question_id"] for item in missing_answer["items"]])
+        self.request_json("DELETE", f"/api/chapters/{chapter['chapter_id']}")
+        self.request_json("DELETE", f"/api/sources/{source['source_id']}")
+
     def test_source_filters_manual_assignment_and_bulk_update(self) -> None:
         source = self.request_json("POST", "/api/sources", payload={"name": "线代讲义"})["source"]
         chapter = self.request_json("POST", "/api/chapters", payload={"source_id": source["source_id"], "name": "矩阵"})["chapter"]
@@ -329,7 +344,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v9', service_worker)
+        self.assertIn('wrongbook-web-v10', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

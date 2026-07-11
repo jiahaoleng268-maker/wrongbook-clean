@@ -263,3 +263,6 @@ The preview recognizes `$...$`, `$$...$$`, `\(...\)`, and `\[...\]`. KaTeX is lo
 ## R2 batch organization
 
 Source and chapter navigation now sends real `source_id` and `chapter_id` filters to the question API. The PaddleOCR import form can assign a source, chapter, and page before creating a question. Question lists support page selection and bulk source, chapter, or organization-status updates. Standard-answer and solution fields also render live math previews.
+## R2 smart library navigation
+
+The sidebar includes dynamic folders for unclassified questions, questions without answers, questions without knowledge points, and questions imported in the last seven days. Sources and empty leaf chapters can be renamed or safely deleted from their tree menu. The question pane can switch between card and compact table views.

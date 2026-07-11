@@ -94,12 +94,29 @@ class SourceCreatePayload(BaseModel):
     description: Optional[str] = None
 
 
+class SourceUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    source_type: Optional[str] = None
+    subject: Optional[str] = None
+    author: Optional[str] = None
+    publisher: Optional[str] = None
+    file_path: Optional[str] = None
+    description: Optional[str] = None
+
+
 class ChapterCreatePayload(BaseModel):
     source_id: int
     name: str
     parent_id: Optional[int] = None
     sort_order: int = 0
     description: Optional[str] = None
+
+class ChapterUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+    description: Optional[str] = None
+
 
 class QuestionBulkUpdatePayload(BaseModel):
     question_ids: list[int]
@@ -1003,6 +1020,28 @@ def create_source(payload: SourceCreatePayload, db: Session = Depends(get_db)):
     return {"source": _source_response(source)}
 
 
+@app.patch("/api/sources/{source_id}")
+def update_source(source_id: int, payload: SourceUpdatePayload, db: Session = Depends(get_db)):
+    source = db.get(Source, source_id)
+    if source is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found.")
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates:
+        updates["name"] = updates["name"].strip() if updates["name"] else ""
+        if not updates["name"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source name is required.")
+    for field, value in updates.items(): setattr(source, field, value.strip() if isinstance(value, str) else value)
+    source.updated_at = utc_now(); db.commit(); db.refresh(source)
+    return {"source": _source_response(source)}
+
+
+@app.delete("/api/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_source(source_id: int, db: Session = Depends(get_db)):
+    source = db.get(Source, source_id)
+    if source is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found.")
+    if source.questions or source.chapters: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only empty sources can be deleted.")
+    db.delete(source); db.commit()
+
 @app.post("/api/chapters", status_code=status.HTTP_201_CREATED)
 def create_chapter(payload: ChapterCreatePayload, db: Session = Depends(get_db)):
     source = db.get(Source, payload.source_id)
@@ -1026,6 +1065,29 @@ def create_chapter(payload: ChapterCreatePayload, db: Session = Depends(get_db))
     db.commit()
     db.refresh(chapter)
     return {"chapter": _chapter_response(chapter)}
+
+@app.patch("/api/chapters/{chapter_id}")
+def update_chapter(chapter_id: int, payload: ChapterUpdatePayload, db: Session = Depends(get_db)):
+    chapter = db.get(Chapter, chapter_id)
+    if chapter is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found.")
+    updates = payload.model_dump(exclude_unset=True)
+    if "parent_id" in updates and updates["parent_id"] is not None:
+        parent = db.get(Chapter, updates["parent_id"])
+        if parent is None or parent.source_id != chapter.source_id or parent.id == chapter.id: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid parent chapter.")
+    if "name" in updates:
+        updates["name"] = updates["name"].strip() if updates["name"] else ""
+        if not updates["name"]: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter name is required.")
+    for field, value in updates.items(): setattr(chapter, field, value.strip() if isinstance(value, str) else value)
+    chapter.updated_at = utc_now(); db.commit(); db.refresh(chapter)
+    return {"chapter": _chapter_response(chapter)}
+
+
+@app.delete("/api/chapters/{chapter_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
+    chapter = db.get(Chapter, chapter_id)
+    if chapter is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found.")
+    if chapter.questions or chapter.children: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only empty leaf chapters can be deleted.")
+    db.delete(chapter); db.commit()
 
 @app.get("/api/questions")
 def list_questions(

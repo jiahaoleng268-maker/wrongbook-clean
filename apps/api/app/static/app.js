@@ -18,6 +18,8 @@
     sourceFilterId: null,
     chapterFilterId: null,
     selectedQuestionIds: new Set(),
+    smartFilter: "",
+    questionView: "card",
   };
 
   const statusLabels = {
@@ -163,6 +165,9 @@
     bulkStatusSelect: $("bulkStatusSelect"),
     applyBulkButton: $("applyBulkButton"),
     bulkState: $("bulkState"),
+    smartFolders: $("smartFolders"),
+    cardViewButton: $("cardViewButton"),
+    tableViewButton: $("tableViewButton"),
     answerPreview: $("answerPreview"),
     solutionPreview: $("solutionPreview"),
     detailTabs: Array.from(document.querySelectorAll("[data-detail-tab]")),
@@ -313,6 +318,7 @@
 
   function renderQuestionList(total) {
     elements.questionList.replaceChildren();
+    elements.questionList.classList.toggle("is-table-view", state.questionView === "table");
     elements.listCount.textContent = `${total} 条`;
 
     if (!state.questions.length) {
@@ -330,6 +336,15 @@
       item.dataset.id = String(question.question_id);
       item.setAttribute("role", "listitem");
       item.classList.toggle("is-selected", question.question_id === state.selectedId);
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "question-select";
+      checkbox.checked = state.selectedQuestionIds.has(question.question_id);
+      checkbox.addEventListener("click", (event) => event.stopPropagation());
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) state.selectedQuestionIds.add(question.question_id); else state.selectedQuestionIds.delete(question.question_id);
+      });
 
       const thumb = document.createElement("img");
       thumb.className = "question-thumb";
@@ -372,7 +387,7 @@
         });
         body.append(tagRow);
       }
-      item.append(thumb, body);
+      item.append(checkbox, thumb, body);
       elements.questionList.append(item);
     }
   }
@@ -773,7 +788,7 @@
       const group = document.createElement("div"); group.className = "source-tree-group";
       const title = document.createElement("button"); title.type = "button"; title.textContent = source.name; title.dataset.sourceId = source.source_id;
       group.append(title);
-      (source.chapters || []).forEach((chapter) => { const item = document.createElement("button"); item.type = "button"; item.textContent = `↳ ${chapter.name}`; item.dataset.chapterId = chapter.chapter_id; group.append(item); });
+      (source.chapters || []).forEach((chapter) => { const row = document.createElement("div"); row.className = "source-tree-row chapter-row"; const item = document.createElement("button"); item.type = "button"; item.textContent = `↳ ${chapter.name}`; item.dataset.chapterId = chapter.chapter_id; const menu = document.createElement("button"); menu.type = "button"; menu.className = "tree-menu"; menu.textContent = "⋯"; menu.dataset.manageChapterId = chapter.chapter_id; row.append(item, menu); group.append(row); });
       elements.sourceTree.append(group);
     });
   }
@@ -1082,34 +1097,11 @@
 
   function switchView(viewName) {
     state.activeView = viewName;
-    elements.appViews.forEach((view) => {
-      view.classList.toggle("is-mobile-active", view.dataset.view === viewName);
-    });
-    elements.manualSourceSelect.addEventListener("change", () => {
-      const source = state.sources.find((item) => item.source_id === Number(elements.manualSourceSelect.value));
-      elements.manualChapterSelect.innerHTML = '<option value="">未选择</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
-    });
-    elements.bulkSourceSelect.addEventListener("change", () => {
-      const source = state.sources.find((item) => item.source_id === Number(elements.bulkSourceSelect.value));
-      elements.bulkChapterSelect.innerHTML = '<option value="">批量章节</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
-    });
-    elements.selectPageQuestions.addEventListener("change", () => {
-      state.questions.forEach((question) => { if (elements.selectPageQuestions.checked) state.selectedQuestionIds.add(question.question_id); else state.selectedQuestionIds.delete(question.question_id); });
-      renderQuestionList(state.questionTotal);
-    });
-    elements.applyBulkButton.addEventListener("click", async () => {
-      const questionIds = Array.from(state.selectedQuestionIds);
-      if (!questionIds.length) { setStateText(elements.bulkState, "请先选择题目", "error"); return; }
-      try {
-        const result = await requestJSON("/api/questions/bulk-update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question_ids: questionIds, source_id: elements.bulkSourceSelect.value ? Number(elements.bulkSourceSelect.value) : null, chapter_id: elements.bulkChapterSelect.value ? Number(elements.bulkChapterSelect.value) : null, status: elements.bulkStatusSelect.value || null }) });
-        state.selectedQuestionIds.clear(); elements.selectPageQuestions.checked = false; await loadQuestions(); setStateText(elements.bulkState, `已更新 ${result.updated_count} 道题`, "success");
-      } catch (error) { setStateText(elements.bulkState, error.message, "error"); }
-    });
+    elements.appViews.forEach((view) => view.classList.toggle("is-mobile-active", view.dataset.view === viewName));
     elements.bottomNavItems.forEach((item) => {
       const active = item.dataset.targetView === viewName;
       item.classList.toggle("is-active", active);
-      if (active) item.setAttribute("aria-current", "page");
-      else item.removeAttribute("aria-current");
+      if (active) item.setAttribute("aria-current", "page"); else item.removeAttribute("aria-current");
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1216,6 +1208,15 @@
       elements.searchInput.value = "";
       state.questionOffset = 0; loadQuestions();
     });
+    elements.smartFolders.addEventListener("click", (event) => {
+      const target = event.target.closest("button"); if (!target) return;
+      state.smartFilter = target.dataset.smartFilter || "";
+      state.sourceFilterId = null; state.chapterFilterId = null; state.questionOffset = 0;
+      elements.smartFolders.querySelectorAll("button").forEach((button) => button.classList.toggle("is-active", button === target));
+      loadQuestions();
+    });
+    elements.cardViewButton.addEventListener("click", () => { state.questionView = "card"; elements.cardViewButton.classList.add("is-active"); elements.tableViewButton.classList.remove("is-active"); renderQuestionList(state.questionTotal); });
+    elements.tableViewButton.addEventListener("click", () => { state.questionView = "table"; elements.tableViewButton.classList.add("is-active"); elements.cardViewButton.classList.remove("is-active"); renderQuestionList(state.questionTotal); });
     elements.manualSourceSelect.addEventListener("change", () => {
       const source = state.sources.find((item) => item.source_id === Number(elements.manualSourceSelect.value));
       elements.manualChapterSelect.innerHTML = '<option value="">未选择</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));

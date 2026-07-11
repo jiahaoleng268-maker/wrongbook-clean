@@ -694,3 +694,6 @@ Assigning a chapter automatically assigns its source. A chapter from a different
 ## Question organization filters and bulk update
 
 `GET /api/questions` accepts optional `source_id` and `chapter_id` query parameters. `POST /api/questions/bulk-update` updates up to 200 selected questions with a source, chapter, or status. `POST /api/questions/manual` accepts optional `source_id`, `chapter_id`, and `source_page` multipart fields.
+## Smart folders and source maintenance
+
+`GET /api/questions` accepts `smart_filter=unclassified|missing_answer|missing_knowledge|recent`. Sources and chapters support `PATCH` updates. Deletion is intentionally restricted: only sources without questions or chapters and leaf chapters without questions can be deleted.
