@@ -305,6 +305,44 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIsNone(retried["started_at"])
         self.assertIsNone(retried["finished_at"])
 
+    def test_question_ocr_rerun_preserves_corrected_text(self) -> None:
+        upload = self.upload_image("rerun.png")
+        question_id = upload["question_id"]
+        with self.assertRaises(urllib.error.HTTPError) as active_error:
+            self.request_json("POST", f"/api/questions/{question_id}/ocr-jobs")
+        self.assertEqual(active_error.exception.code, 409)
+
+        job = self.request_json("GET", "/api/ocr/jobs/next", headers=self.worker_headers())["job"]
+        self.request_json(
+            "POST",
+            f"/api/ocr/jobs/{job['ocr_job_id']}/result",
+            payload={"raw_text": "first OCR"},
+            headers=self.worker_headers(),
+        )
+        self.request_json(
+            "PATCH",
+            f"/api/questions/{question_id}",
+            payload={"corrected_text": "manual correction", "status": "corrected"},
+        )
+
+        rerun = self.request_json("POST", f"/api/questions/{question_id}/ocr-jobs")
+        self.assertEqual(rerun["job"]["status"], "pending")
+        self.assertNotEqual(rerun["job"]["ocr_job_id"], upload["ocr_job_id"])
+        self.assertEqual(rerun["question"]["corrected_text"], "manual correction")
+        self.assertEqual(len(rerun["question"]["ocr_jobs"]), 2)
+
+        rerun_job = self.request_json("GET", "/api/ocr/jobs/next", headers=self.worker_headers())["job"]
+        self.request_json(
+            "POST",
+            f"/api/ocr/jobs/{rerun_job['ocr_job_id']}/result",
+            payload={"raw_text": "second OCR"},
+            headers=self.worker_headers(),
+        )
+        detail = self.request_json("GET", f"/api/questions/{question_id}")["question"]
+        self.assertEqual(detail["raw_text"], "second OCR")
+        self.assertEqual(detail["corrected_text"], "manual correction")
+        self.assertEqual(detail["status"], "corrected")
+
     def test_question_browse_detail_and_update_api(self) -> None:
         upload = self.upload_image("browse.png")
         job = self.request_json(

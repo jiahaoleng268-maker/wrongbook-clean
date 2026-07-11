@@ -1347,6 +1347,33 @@ def update_question(
 
     return {"question": _question_detail_response(question)}
 
+@app.post("/api/questions/{question_id}/ocr-jobs", status_code=status.HTTP_201_CREATED)
+def create_question_ocr_job(question_id: int, db: Session = Depends(get_db)):
+    question = _get_question_or_404(db, question_id)
+    active_job = (
+        db.query(OCRJob)
+        .filter(OCRJob.question_id == question_id, OCRJob.status.in_(["pending", "running"]))
+        .order_by(OCRJob.id.desc())
+        .first()
+    )
+    if active_job:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Question already has an active OCR job.",
+        )
+    asset = next(iter(_sorted_assets(question)), None)
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Question has no image asset for OCR.",
+        )
+    job = OCRJob(question=question, asset=asset, status="pending")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return {"job": _job_response(job), "question": _question_detail_response(question)}
+
+
 @app.post("/api/questions/upload")
 async def upload_question_image(
     file: UploadFile = File(...),

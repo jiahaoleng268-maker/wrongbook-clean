@@ -673,4 +673,8 @@ The JSON envelope reports applied filters, total matching questions, exported co
 
 ### `POST /api/questions/import`
 
-?? `.json` ????? `wrongbook-question` v1 ? `wrongbook-question-collection` v1????? 500 ??????? 5 MiB???????????????????????????????? ID????OCR ??????????????????????????
+Uploads a `.json` file in `wrongbook-question` v1 or `wrongbook-question-collection` v1 format. A file may contain at most 500 questions and may not exceed 5 MiB. Import always creates new questions, reuses matching knowledge points and mistake tags, and ignores old IDs, images, OCR jobs, review history, and original timestamps. Any invalid question rolls back the entire import.
+
+### `POST /api/questions/{question_id}/ocr-jobs`
+
+Creates a new pending OCR job from the question's first stored image. It keeps previous OCR jobs as history and never clears `corrected_text`. The endpoint returns `409` when the question has no image or already has a pending/running OCR job.

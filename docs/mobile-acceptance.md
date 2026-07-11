@@ -43,3 +43,8 @@ Run this checklist on at least one Android or iPhone before a release. Use a tem
 - Run a verified backup before deployment.
 - Restore the backup into a temporary directory and confirm the database and uploaded images are readable.
 - Confirm databases, uploads, backups, logs, and OCR models remain outside Git.
+
+## Recorded phone feedback
+
+- Some phone browsers open the camera-only capture flow and do not offer the photo gallery from the current picker. Keep this as a future upload UI task with separate Camera and Gallery controls.
+- The current single-page dashboard should later be redesigned as a directory-style mobile app with bottom navigation. This redesign is intentionally deferred until the OCR workflow is stable.

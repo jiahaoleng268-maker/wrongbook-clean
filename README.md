@@ -225,3 +225,5 @@ The server is intended to stay lightweight. OCR and large-model workloads must r
 ## Mobile acceptance
 
 Before a release, run the real-device checklist in `docs/mobile-acceptance.md`. Automated checks cover UTF-8 responses, PWA metadata, and narrow viewport layout, but camera behavior and home-screen installation still require a physical phone.
+
+- Question details can create a new OCR job from the stored original image. Re-recognition updates OCR raw text only and preserves manual corrected text.

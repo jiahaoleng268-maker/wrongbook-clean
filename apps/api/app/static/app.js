@@ -105,6 +105,7 @@
     restoreQuestionButton: $("restoreQuestionButton"),
     saveButton: $("saveButton"),
     copyRawButton: $("copyRawButton"),
+    rerunOcrButton: $("rerunOcrButton"),
     saveState: $("saveState"),
     fileLabel: document.querySelector(".file-picker span"),
   };
@@ -605,6 +606,7 @@
       elements.questionImage.hidden = true;
     }
 
+    elements.rerunOcrButton.disabled = !firstAsset || Boolean(job && ["pending", "running"].includes(job.status));
     const jobText = job ? jobLabels[job.status] || job.status : "暂无 OCR 任务";
     const confidence = job && job.confidence ? ` · 置信度 ${Math.round(job.confidence * 100)}%` : "";
     setStateText(elements.detailStatus, `${statusLabels[question.status] || question.status || "未知"} · ${jobText}${confidence}`);
@@ -659,6 +661,24 @@
       elements.uploadButton.disabled = false;
     }
   }
+
+  async function handleRerunOcr() {
+    const question = state.currentQuestion;
+    if (!question) return;
+    elements.rerunOcrButton.disabled = true;
+    setStateText(elements.detailStatus, "Creating a new OCR job...");
+    try {
+      const data = await requestJSON(`/api/questions/${question.question_id}/ocr-jobs`, { method: "POST" });
+      state.currentQuestion = data.question;
+      renderDetail(data.question);
+      setStateText(elements.detailStatus, `OCR job #${data.job.ocr_job_id} created. Corrected text is preserved.`, "success");
+      await loadQuestions();
+    } catch (error) {
+      setStateText(elements.detailStatus, error.message, "error");
+      elements.rerunOcrButton.disabled = false;
+    }
+  }
+
 
   async function handleSave(event) {
     event.preventDefault();
@@ -869,6 +889,8 @@
       elements.fileLabel.textContent = file ? file.name : "拍照或选择图片";
       setStateText(elements.uploadState, file ? "图片已选择" : "等待图片");
     });
+
+    elements.rerunOcrButton.addEventListener("click", handleRerunOcr);
 
     elements.copyRawButton.addEventListener("click", () => {
       elements.correctedTextInput.value = elements.rawTextInput.value;

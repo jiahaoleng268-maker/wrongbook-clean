@@ -42,6 +42,7 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - filtered JSON and Markdown question collection exports added
 - safe versioned JSON question import added
 - mobile-width overflow regression fixed and PWA acceptance checklist added
+- safe OCR re-recognition from the stored original image added
 
 ## Current Task
 
