@@ -202,7 +202,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v3', service_worker)
+        self.assertIn('wrongbook-web-v4', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)
