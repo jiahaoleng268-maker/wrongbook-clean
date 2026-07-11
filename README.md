@@ -104,7 +104,13 @@ SERVER_URL=http://127.0.0.1:8000
 WORKER_TOKEN=change-me
 WORKER_NAME=local-mock-worker
 POLL_INTERVAL=3
+OCR_ENGINE=mock
 ```
+
+Supported worker engine modes:
+
+- `OCR_ENGINE=mock` is the default and returns predictable fake OCR text.
+- `OCR_ENGINE=paddle` is a placeholder mode for future PaddleOCR wiring. Until PaddleOCR is installed and connected on the Windows laptop, jobs are marked `failed` with a clear dependency/setup message.
 
 Run continuously:
 

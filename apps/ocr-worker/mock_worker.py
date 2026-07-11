@@ -7,12 +7,14 @@ from typing import Optional
 import urllib.error
 import urllib.request
 
+from engines import OCRResult, build_engine
+
 
 DEFAULT_SERVER_URL = "http://127.0.0.1:8000"
 DEFAULT_WORKER_TOKEN = "change-me"
 DEFAULT_WORKER_NAME = "local-mock-worker"
 DEFAULT_POLL_INTERVAL = 3.0
-MOCK_RAW_TEXT = "mock OCR text from worker"
+DEFAULT_OCR_ENGINE = "mock"
 
 
 class WorkerRequestError(Exception):
@@ -25,11 +27,13 @@ class MockOCRWorker:
         server_url: str,
         worker_token: str,
         worker_name: str,
+        ocr_engine: str,
         poll_interval: float,
     ) -> None:
         self.server_url = server_url.rstrip("/")
         self.worker_token = worker_token
         self.worker_name = worker_name
+        self.engine = build_engine(ocr_engine)
         self.poll_interval = poll_interval
 
     @property
@@ -76,7 +80,7 @@ class MockOCRWorker:
 
         return json.loads(body)
 
-    def _download_asset(self, asset_id: int) -> int:
+    def _download_asset(self, asset_id: int) -> bytes:
         request = urllib.request.Request(
             self._url(f"/api/assets/{asset_id}/file"),
             headers=self.headers,
@@ -85,7 +89,7 @@ class MockOCRWorker:
 
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                return len(response.read())
+                return response.read()
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
             raise WorkerRequestError(
@@ -103,21 +107,28 @@ class MockOCRWorker:
         ocr_job_id: int,
         asset_id: int,
         file_path: Optional[str],
-        downloaded_bytes: int,
+        image_bytes: bytes,
+        ocr_result: OCRResult,
         duration_ms: int,
     ) -> dict:
+        raw_json = {
+            "engine": self.engine.name,
+            "asset_id": asset_id,
+            "file_path": file_path,
+            "downloaded_bytes": len(image_bytes),
+            "worker_name": self.worker_name,
+        }
+        if isinstance(ocr_result.raw_json, dict):
+            raw_json.update(ocr_result.raw_json)
+        elif ocr_result.raw_json is not None:
+            raw_json["result"] = ocr_result.raw_json
+
         payload = {
-            "raw_json": {
-                "mock": True,
-                "asset_id": asset_id,
-                "file_path": file_path,
-                "downloaded_bytes": downloaded_bytes,
-                "worker_name": self.worker_name,
-            },
-            "raw_text": MOCK_RAW_TEXT,
-            "model_name": "mock-ocr-worker",
+            "raw_json": raw_json,
+            "raw_text": ocr_result.raw_text,
+            "model_name": ocr_result.model_name,
             "duration_ms": duration_ms,
-            "confidence": 1.0,
+            "confidence": ocr_result.confidence,
         }
         return self._request_json("POST", f"/api/ocr/jobs/{ocr_job_id}/result", payload)
 
@@ -135,13 +146,15 @@ class MockOCRWorker:
             if asset_id is None:
                 raise WorkerRequestError("OCR job has no asset_id.")
 
-            downloaded_bytes = self._download_asset(asset_id)
+            image_bytes = self._download_asset(asset_id)
+            ocr_result = self.engine.recognize(image_bytes=image_bytes, job=job)
             duration_ms = int((time.monotonic() - started) * 1000)
             result = self.submit_result(
                 ocr_job_id=ocr_job_id,
                 asset_id=asset_id,
                 file_path=file_path,
-                downloaded_bytes=downloaded_bytes,
+                image_bytes=image_bytes,
+                ocr_result=ocr_result,
                 duration_ms=duration_ms,
             )
             status = result.get("job", {}).get("status")
@@ -204,12 +217,13 @@ def build_worker() -> MockOCRWorker:
         server_url=os.getenv("SERVER_URL", DEFAULT_SERVER_URL),
         worker_token=os.getenv("WORKER_TOKEN", DEFAULT_WORKER_TOKEN),
         worker_name=os.getenv("WORKER_NAME", DEFAULT_WORKER_NAME),
+        ocr_engine=os.getenv("OCR_ENGINE", DEFAULT_OCR_ENGINE),
         poll_interval=_env_float("POLL_INTERVAL", DEFAULT_POLL_INTERVAL),
     )
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the WrongBook mock OCR Worker.")
+    parser = argparse.ArgumentParser(description="Run the WrongBook OCR Worker.")
     parser.add_argument("--once", action="store_true", help="Poll once and exit.")
     args = parser.parse_args()
 

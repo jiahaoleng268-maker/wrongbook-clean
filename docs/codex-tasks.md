@@ -19,20 +19,22 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - safe uploaded asset file endpoint added at `GET /api/assets/{asset_id}/file`
 - mock OCR Worker loop added
 - focused integration tests added for upload, asset download, OCR jobs, and mock Worker flow
+- selectable OCR engine layer added to the Worker
+- `OCR_ENGINE=paddle` placeholder mode added with clear failed-job setup errors
 
 ## Current Task
 
-- prepare PaddleOCR Worker mode behind a selectable OCR engine
-- keep mock mode as the default local verification path
-- do not install PaddleOCR on the server
+- prepare real PaddleOCR installation and model wiring on the Windows laptop
+- keep `OCR_ENGINE=mock` as the default until PaddleOCR is verified locally
+- keep the 2c2g server free of OCR/model workloads
 
 ## Next Tasks
 
 Recommended order:
 
-1. PaddleOCR Worker mode
-2. Vue 3 + Vite frontend
-3. review scheduling and mistake tagging APIs
+1. install and verify PaddleOCR locally on the Windows laptop
+2. wire the real PaddleOCR engine behind `OCR_ENGINE=paddle`
+3. Vue 3 + Vite frontend
 
 ## Task Boundaries
 
@@ -54,5 +56,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please add a selectable OCR engine layer for the WrongBook Worker. Keep mock mode as the default, add a PaddleOCR placeholder mode that fails jobs with a clear dependency error when PaddleOCR is not installed, do not install PaddleOCR yet, do not create a frontend, and keep server-side OCR disabled.
+Please prepare the next PaddleOCR integration step for the Windows laptop only. First verify the correct PaddleOCR/PaddlePaddle installation commands for this machine, keep OCR_ENGINE=mock as the default, and do not put PaddleOCR or model files on the server or into Git.
 ```

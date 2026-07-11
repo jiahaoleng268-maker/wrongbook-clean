@@ -227,6 +227,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
         env["WORKER_TOKEN"] = WORKER_TOKEN
         env["WORKER_NAME"] = "test-mock-worker"
         env["POLL_INTERVAL"] = "0.1"
+        env["OCR_ENGINE"] = "mock"
 
         completed = subprocess.run(
             [sys.executable, str(WORKER_SCRIPT), "--once"],
@@ -253,6 +254,40 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertEqual(job["model_name"], "mock-ocr-worker")
         self.assertEqual(job["raw_text"], "mock OCR text from worker")
         self.assertIn('"downloaded_bytes"', job["raw_json"])
+
+    def test_paddle_engine_placeholder_fails_pending_job(self) -> None:
+        upload = self.upload_image("paddle.png")
+
+        env = self.env.copy()
+        env["SERVER_URL"] = self.base_url
+        env["WORKER_TOKEN"] = WORKER_TOKEN
+        env["WORKER_NAME"] = "test-paddle-worker"
+        env["POLL_INTERVAL"] = "0.1"
+        env["OCR_ENGINE"] = "paddle"
+
+        completed = subprocess.run(
+            [sys.executable, str(WORKER_SCRIPT), "--once"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode,
+            1,
+            msg=f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
+        )
+
+        job = self.request_json(
+            "GET",
+            f"/api/ocr/jobs/{upload['ocr_job_id']}",
+            headers=self.worker_headers(),
+        )["job"]
+        self.assertEqual(job["status"], "failed")
+        self.assertEqual(job["worker_name"], "test-paddle-worker")
+        self.assertIn("OCR_ENGINE=paddle", job["error_message"])
 
 
 if __name__ == "__main__":

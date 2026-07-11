@@ -41,7 +41,7 @@ Example worker configuration:
 SERVER_URL=http://127.0.0.1:8000
 WORKER_TOKEN=change-me
 WORKER_NAME=windows-laptop-01
-OCR_MODE=mock
+OCR_ENGINE=mock
 POLL_INTERVAL=5
 MODEL_ROOT=D:\Code\WB\wrongbook-models\paddleocr
 RUNTIME_DIR=D:\Code\WB\wrongbook-runtime
@@ -163,7 +163,12 @@ SERVER_URL=http://127.0.0.1:8000
 WORKER_TOKEN=change-me
 WORKER_NAME=local-mock-worker
 POLL_INTERVAL=3
+OCR_ENGINE=mock
 ```
+
+`OCR_ENGINE=mock` is the default and keeps the fast local verification flow.
+
+`OCR_ENGINE=paddle` exists as a placeholder mode. Until PaddleOCR and PaddlePaddle are installed and model wiring is implemented on the Windows laptop, the Worker will claim the job, mark it `failed`, and store a clear setup error in `error_message`.
 
 Run the API first:
 
@@ -193,9 +198,9 @@ The mock Worker loop is:
 4. submit `raw_text = "mock OCR text from worker"` to `POST /api/ocr/jobs/{id}/result`
 5. submit `POST /api/ocr/jobs/{id}/fail` if processing raises an error
 
-## Planned Worker Modes
+## Worker Engine Modes
 
-`mock` mode:
+`OCR_ENGINE=mock` mode:
 
 - does not install PaddleOCR
 - polls real server-side OCR jobs
@@ -203,17 +208,17 @@ The mock Worker loop is:
 - returns predictable fake OCR text
 - is implemented as the first end-to-end Worker loop
 
-`paddle` mode:
+`OCR_ENGINE=paddle` mode:
 
 - runs on the Windows laptop
-- loads models from `MODEL_ROOT`
-- downloads images into `DOWNLOAD_DIR`
-- writes logs into `LOG_DIR`
-- uses `TEMP_DIR` for temporary files
-- submits OCR text and status back to the server
+- is present as a placeholder before PaddleOCR installation
+- fails claimed jobs with a clear dependency/setup message while PaddleOCR is not installed or wired
+- must not be enabled on the low-resource server
+- will later load models from `MODEL_ROOT`
+- will later submit real OCR text and status back to the server
 
 ## Current Rule
 
 Do not install PaddleOCR yet.
 
-The server-side OCR job API and mock Worker loop now exist. PaddleOCR installation and model wiring should happen only after the API and mock worker flow are stable.
+The server-side OCR job API, mock Worker loop, automated tests, and selectable OCR engine layer now exist. PaddleOCR installation and model wiring should happen only after this flow stays green.
