@@ -1004,3 +1004,8 @@ body { padding-left: 220px; background: #f4f6fa; }
 .source-form { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 22px; }
 .source-form h2 { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 760px) { .structured-editor-grid, .classification-grid, .source-form { grid-template-columns: 1fr; } }
+.bulk-actions { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 10px; margin-bottom: 10px; border-radius: 10px; background: #eef3fb; }
+.question-item { position: relative; }
+.question-select { flex: 0 0 auto; width: 18px; height: 18px; margin: 8px 2px 0 0; }
+.structured-editor-grid .latex-preview-content { min-height: 70px; padding: 10px; border: 1px dashed #c4cfdd; border-radius: 10px; background: #fbfcff; white-space: pre-wrap; }
+@media (max-width: 1000px) { .bulk-actions { grid-template-columns: 1fr 1fr; } }

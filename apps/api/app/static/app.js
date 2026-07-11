@@ -15,6 +15,9 @@
     formulaSelection: null,
     formulaImage: null,
     sources: [],
+    sourceFilterId: null,
+    chapterFilterId: null,
+    selectedQuestionIds: new Set(),
   };
 
   const statusLabels = {
@@ -47,6 +50,9 @@
     manualSourceInput: $("manualSourceInput"),
     manualTypeInput: $("manualTypeInput"),
     paddleTextInput: $("paddleTextInput"),
+    manualSourceSelect: $("manualSourceSelect"),
+    manualChapterSelect: $("manualChapterSelect"),
+    manualSourcePageInput: $("manualSourcePageInput"),
     refreshButton: $("refreshButton"),
     searchInput: $("searchInput"),
     statusFilter: $("statusFilter"),
@@ -151,6 +157,14 @@
     parentChapterInput: $("parentChapterInput"),
     chapterNameInput: $("chapterNameInput"),
     sourceDialogState: $("sourceDialogState"),
+    selectPageQuestions: $("selectPageQuestions"),
+    bulkSourceSelect: $("bulkSourceSelect"),
+    bulkChapterSelect: $("bulkChapterSelect"),
+    bulkStatusSelect: $("bulkStatusSelect"),
+    applyBulkButton: $("applyBulkButton"),
+    bulkState: $("bulkState"),
+    answerPreview: $("answerPreview"),
+    solutionPreview: $("solutionPreview"),
     detailTabs: Array.from(document.querySelectorAll("[data-detail-tab]")),
     detailPanels: Array.from(document.querySelectorAll("[data-detail-panel]")),
     appViews: Array.from(document.querySelectorAll(".app-view")),
@@ -717,25 +731,25 @@
       elements.submitFormulaCropButton.disabled = false;
     }
   }
-  function renderLatexPreview() {
-    const content = elements.correctedTextInput.value || "";
-    elements.latexPreviewContent.replaceChildren();
+  function renderMathInto(element, content) {
+    element.replaceChildren();
     const blockPattern = /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\$([^$\n]+)\$|\\\((.*?)\\\)/g;
     let lastIndex = 0;
-    for (const match of content.matchAll(blockPattern)) {
-      if (match.index > lastIndex) elements.latexPreviewContent.append(document.createTextNode(content.slice(lastIndex, match.index)));
+    for (const match of (content || "").matchAll(blockPattern)) {
+      if (match.index > lastIndex) element.append(document.createTextNode(content.slice(lastIndex, match.index)));
       const formula = match[1] || match[2] || match[3] || match[4] || "";
       const node = document.createElement(match[1] || match[2] ? "div" : "span");
-      if (window.katex) {
-        try { window.katex.render(formula, node, { throwOnError: false, displayMode: Boolean(match[1] || match[2]) }); }
-        catch { node.textContent = formula; }
-      } else node.textContent = formula;
-      elements.latexPreviewContent.append(node);
-      lastIndex = match.index + match[0].length;
+      if (window.katex) { try { window.katex.render(formula, node, { throwOnError: false, displayMode: Boolean(match[1] || match[2]) }); } catch { node.textContent = formula; } }
+      else node.textContent = formula;
+      element.append(node); lastIndex = match.index + match[0].length;
     }
-    if (lastIndex < content.length) elements.latexPreviewContent.append(document.createTextNode(content.slice(lastIndex)));
+    if (lastIndex < (content || "").length) element.append(document.createTextNode(content.slice(lastIndex)));
   }
-
+  function renderLatexPreview() {
+    renderMathInto(elements.latexPreviewContent, elements.correctedTextInput.value || "");
+    renderMathInto(elements.answerPreview, elements.answerTextInput.value || "");
+    renderMathInto(elements.solutionPreview, elements.solutionTextInput.value || "");
+  }
   function renderSourceOptions(selectedSourceId = null, selectedChapterId = null) {
     const sourceOptions = ['<option value="">未选择</option>'];
     state.sources.forEach((source) => sourceOptions.push(`<option value="${source.source_id}">${escapeHtml(source.name)}</option>`));
@@ -746,7 +760,10 @@
     const source = state.sources.find((item) => item.source_id === sourceId);
     const chapters = source ? source.chapters || [] : [];
     elements.chapterSelect.innerHTML = '<option value="">未选择</option>' + chapters.map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join("");
-    elements.parentChapterInput.innerHTML = '<option value="">无上级章节</option>' + chapters.map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join("");
+    const chapterOptions = chapters.map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join("");
+    elements.parentChapterInput.innerHTML = '<option value="">无上级章节</option>' + chapterOptions;
+    elements.manualChapterSelect.innerHTML = '<option value="">未选择</option>' + chapterOptions;
+    elements.bulkChapterSelect.innerHTML = '<option value="">批量章节</option>' + chapterOptions;
     if (selectedChapterId) elements.chapterSelect.value = String(selectedChapterId);
   }
 
@@ -856,6 +873,9 @@
     formData.append("subject", elements.manualSubjectInput.value.trim());
     formData.append("source", elements.manualSourceInput.value.trim());
     formData.append("question_type", elements.manualTypeInput.value.trim());
+    formData.append("source_id", elements.manualSourceSelect.value);
+    formData.append("chapter_id", elements.manualChapterSelect.value);
+    formData.append("source_page", elements.manualSourcePageInput.value.trim());
     formData.append("content", content);
     if (file) formData.append("file", file);
 
@@ -1065,37 +1085,25 @@
     elements.appViews.forEach((view) => {
       view.classList.toggle("is-mobile-active", view.dataset.view === viewName);
     });
-    elements.detailTabs.forEach((tab) => tab.addEventListener("click", () => switchDetailTab(tab.dataset.detailTab)));
-    elements.correctedTextInput.addEventListener("input", renderLatexPreview);
-    elements.sourceSelect.addEventListener("change", () => { renderSourceOptions(Number(elements.sourceSelect.value || 0), null); markDirty(); });
-    elements.chapterSelect.addEventListener("change", markDirty);
-    elements.openSourceDialogButton.addEventListener("click", () => { renderSourceOptions(); elements.sourceDialog.showModal(); });
-    elements.closeSourceDialogButton.addEventListener("click", () => elements.sourceDialog.close());
-    elements.chapterSourceInput.addEventListener("change", () => {
-      const source = state.sources.find((item) => item.source_id === Number(elements.chapterSourceInput.value));
-      elements.parentChapterInput.innerHTML = '<option value="">无上级章节</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
+    elements.manualSourceSelect.addEventListener("change", () => {
+      const source = state.sources.find((item) => item.source_id === Number(elements.manualSourceSelect.value));
+      elements.manualChapterSelect.innerHTML = '<option value="">未选择</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
     });
-    elements.sourceForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    elements.bulkSourceSelect.addEventListener("change", () => {
+      const source = state.sources.find((item) => item.source_id === Number(elements.bulkSourceSelect.value));
+      elements.bulkChapterSelect.innerHTML = '<option value="">批量章节</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
+    });
+    elements.selectPageQuestions.addEventListener("change", () => {
+      state.questions.forEach((question) => { if (elements.selectPageQuestions.checked) state.selectedQuestionIds.add(question.question_id); else state.selectedQuestionIds.delete(question.question_id); });
+      renderQuestionList(state.questionTotal);
+    });
+    elements.applyBulkButton.addEventListener("click", async () => {
+      const questionIds = Array.from(state.selectedQuestionIds);
+      if (!questionIds.length) { setStateText(elements.bulkState, "请先选择题目", "error"); return; }
       try {
-        await requestJSON("/api/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: elements.sourceNameInput.value, subject: elements.sourceSubjectInput.value || null, source_type: elements.sourceTypeInput.value || null }) });
-        elements.sourceForm.reset(); await loadSources(); setStateText(elements.sourceDialogState, "资料已创建", "success");
-      } catch (error) { setStateText(elements.sourceDialogState, error.message, "error"); }
-    });
-    elements.chapterForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      try {
-        await requestJSON("/api/chapters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_id: Number(elements.chapterSourceInput.value), parent_id: elements.parentChapterInput.value ? Number(elements.parentChapterInput.value) : null, name: elements.chapterNameInput.value }) });
-        elements.chapterForm.reset(); await loadSources(); setStateText(elements.sourceDialogState, "章节已创建", "success");
-      } catch (error) { setStateText(elements.sourceDialogState, error.message, "error"); }
-    });
-    elements.sourceTree.addEventListener("click", (event) => {
-      const target = event.target.closest("button"); if (!target) return;
-      const source = target.dataset.sourceId ? state.sources.find((item) => item.source_id === Number(target.dataset.sourceId)) : null;
-      const chapterId = target.dataset.chapterId ? Number(target.dataset.chapterId) : null;
-      const chapterSource = chapterId ? state.sources.find((item) => (item.chapters || []).some((chapter) => chapter.chapter_id === chapterId)) : null;
-      elements.searchInput.value = source?.name || chapterSource?.chapters.find((chapter) => chapter.chapter_id === chapterId)?.name || "";
-      state.questionOffset = 0; loadQuestions();
+        const result = await requestJSON("/api/questions/bulk-update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question_ids: questionIds, source_id: elements.bulkSourceSelect.value ? Number(elements.bulkSourceSelect.value) : null, chapter_id: elements.bulkChapterSelect.value ? Number(elements.bulkChapterSelect.value) : null, status: elements.bulkStatusSelect.value || null }) });
+        state.selectedQuestionIds.clear(); elements.selectPageQuestions.checked = false; await loadQuestions(); setStateText(elements.bulkState, `已更新 ${result.updated_count} 道题`, "success");
+      } catch (error) { setStateText(elements.bulkState, error.message, "error"); }
     });
     elements.bottomNavItems.forEach((item) => {
       const active = item.dataset.targetView === viewName;
@@ -1105,7 +1113,6 @@
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
-
   function selectImageSources(files) {
     state.selectedImageFiles = Array.from(files || []);
     const count = state.selectedImageFiles.length;
@@ -1174,6 +1181,8 @@
     });
     elements.detailTabs.forEach((tab) => tab.addEventListener("click", () => switchDetailTab(tab.dataset.detailTab)));
     elements.correctedTextInput.addEventListener("input", renderLatexPreview);
+    elements.answerTextInput.addEventListener("input", renderLatexPreview);
+    elements.solutionTextInput.addEventListener("input", renderLatexPreview);
     elements.sourceSelect.addEventListener("change", () => { renderSourceOptions(Number(elements.sourceSelect.value || 0), null); markDirty(); });
     elements.chapterSelect.addEventListener("change", markDirty);
     elements.openSourceDialogButton.addEventListener("click", () => { renderSourceOptions(); elements.sourceDialog.showModal(); });
@@ -1198,11 +1207,34 @@
     });
     elements.sourceTree.addEventListener("click", (event) => {
       const target = event.target.closest("button"); if (!target) return;
-      const source = target.dataset.sourceId ? state.sources.find((item) => item.source_id === Number(target.dataset.sourceId)) : null;
-      const chapterId = target.dataset.chapterId ? Number(target.dataset.chapterId) : null;
-      const chapterSource = chapterId ? state.sources.find((item) => (item.chapters || []).some((chapter) => chapter.chapter_id === chapterId)) : null;
-      elements.searchInput.value = source?.name || chapterSource?.chapters.find((chapter) => chapter.chapter_id === chapterId)?.name || "";
+      state.sourceFilterId = target.dataset.sourceId ? Number(target.dataset.sourceId) : null;
+      state.chapterFilterId = target.dataset.chapterId ? Number(target.dataset.chapterId) : null;
+      if (state.chapterFilterId) {
+        const owner = state.sources.find((item) => (item.chapters || []).some((chapter) => chapter.chapter_id === state.chapterFilterId));
+        state.sourceFilterId = owner?.source_id || null;
+      }
+      elements.searchInput.value = "";
       state.questionOffset = 0; loadQuestions();
+    });
+    elements.manualSourceSelect.addEventListener("change", () => {
+      const source = state.sources.find((item) => item.source_id === Number(elements.manualSourceSelect.value));
+      elements.manualChapterSelect.innerHTML = '<option value="">未选择</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
+    });
+    elements.bulkSourceSelect.addEventListener("change", () => {
+      const source = state.sources.find((item) => item.source_id === Number(elements.bulkSourceSelect.value));
+      elements.bulkChapterSelect.innerHTML = '<option value="">批量章节</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
+    });
+    elements.selectPageQuestions.addEventListener("change", () => {
+      state.questions.forEach((question) => { if (elements.selectPageQuestions.checked) state.selectedQuestionIds.add(question.question_id); else state.selectedQuestionIds.delete(question.question_id); });
+      renderQuestionList(state.questionTotal);
+    });
+    elements.applyBulkButton.addEventListener("click", async () => {
+      const questionIds = Array.from(state.selectedQuestionIds);
+      if (!questionIds.length) { setStateText(elements.bulkState, "请先选择题目", "error"); return; }
+      try {
+        const result = await requestJSON("/api/questions/bulk-update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question_ids: questionIds, source_id: elements.bulkSourceSelect.value ? Number(elements.bulkSourceSelect.value) : null, chapter_id: elements.bulkChapterSelect.value ? Number(elements.bulkChapterSelect.value) : null, status: elements.bulkStatusSelect.value || null }) });
+        state.selectedQuestionIds.clear(); elements.selectPageQuestions.checked = false; await loadQuestions(); setStateText(elements.bulkState, `已更新 ${result.updated_count} 道题`, "success");
+      } catch (error) { setStateText(elements.bulkState, error.message, "error"); }
     });
     elements.bottomNavItems.forEach((item) => {
       item.addEventListener("click", () => switchView(item.dataset.targetView));

@@ -260,3 +260,6 @@ The Windows worker includes an experimental `OCR_ENGINE=formula` backed by `PP-F
 The PC workspace now supports source and hierarchical chapter records, structured question fields, detail tabs, and a live LaTeX preview. Create sources and chapters from the left sidebar, assign them in the **分类信息** tab, and edit standard answers, solutions, personal solutions, mistakes, key steps, and notes in dedicated tabs.
 
 The preview recognizes `$...$`, `$$...$$`, `\(...\)`, and `\[...\]`. KaTeX is loaded in the browser; if it is unavailable, the preview falls back to readable source text instead of blocking editing.
+## R2 batch organization
+
+Source and chapter navigation now sends real `source_id` and `chapter_id` filters to the question API. The PaddleOCR import form can assign a source, chapter, and page before creating a question. Question lists support page selection and bulk source, chapter, or organization-status updates. Standard-answer and solution fields also render live math previews.

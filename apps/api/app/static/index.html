@@ -31,7 +31,7 @@
             <label><span>标题</span><input id="manualTitleInput" type="text" maxlength="255" placeholder="例如：例 18 极限计算" /></label>
             <label><span>科目</span><input id="manualSubjectInput" type="text" maxlength="100" placeholder="高等数学" /></label>
             <label><span>来源</span><input id="manualSourceInput" type="text" maxlength="255" value="PaddleOCR Web" /></label>
-            <label><span>题型</span><input id="manualTypeInput" type="text" maxlength="100" placeholder="函数极限" /></label>
+            <label><span>题型</span><input id="manualTypeInput" type="text" maxlength="100" placeholder="函数极限" /></label><label><span>资料</span><select id="manualSourceSelect"><option value="">未选择</option></select></label><label><span>章节</span><select id="manualChapterSelect"><option value="">未选择</option></select></label><label><span>页码</span><input id="manualSourcePageInput" type="text" maxlength="50" /></label>
           </div>
           <label class="paddle-text-field"><span>PaddleOCR 文本 / Markdown / LaTeX</span><textarea id="paddleTextInput" rows="12" placeholder="在网页版 PaddleOCR 复制解析结果，然后粘贴到这里。"></textarea></label>
           <div class="desktop-import-footer">
@@ -120,7 +120,7 @@
               <option value="archived">已归档</option>
             </select>
           </div>
-          <div class="filtered-export-actions">
+          <div class="bulk-actions"><label><input id="selectPageQuestions" type="checkbox" /> 选择本页</label><select id="bulkSourceSelect"><option value="">批量资料</option></select><select id="bulkChapterSelect"><option value="">批量章节</option></select><select id="bulkStatusSelect"><option value="">批量状态</option><option value="draft">待整理</option><option value="recognized">整理中</option><option value="corrected">已完成</option><option value="archived">已归档</option></select><button id="applyBulkButton" class="ghost-button" type="button">应用到所选题目</button><span id="bulkState" class="state-text"></span></div><div class="filtered-export-actions">
             <button id="exportFilteredJsonButton" class="ghost-button" type="button">导出筛选 JSON</button>
             <button id="exportFilteredMarkdownButton" class="ghost-button" type="button">导出筛选 Markdown</button>
           </div>
@@ -216,7 +216,7 @@
 
 
             </section>
-            <section class="detail-tab-panel" data-detail-panel="solution"><div class="structured-editor-grid"><label><span>标准答案</span><textarea id="answerTextInput"></textarea></label><label><span>解题过程</span><textarea id="solutionTextInput"></textarea></label><label><span>个人解法</span><textarea id="personalSolutionInput"></textarea></label><label><span>关键步骤</span><textarea id="keyStepsInput"></textarea></label></div></section>
+            <section class="detail-tab-panel" data-detail-panel="solution"><div class="structured-editor-grid"><label><span>标准答案</span><textarea id="answerTextInput"></textarea><div id="answerPreview" class="latex-preview-content"></div></label><label><span>解题过程</span><textarea id="solutionTextInput"></textarea><div id="solutionPreview" class="latex-preview-content"></div></label><label><span>个人解法</span><textarea id="personalSolutionInput"></textarea></label><label><span>关键步骤</span><textarea id="keyStepsInput"></textarea></label></div></section>
             <section class="detail-tab-panel" data-detail-panel="mistake"><div class="structured-editor-grid"><label><span>当时错误答案</span><textarea id="wrongAnswerInput"></textarea></label><label><span>错误原因</span><textarea id="mistakeAnalysisInput"></textarea></label><label class="wide-field"><span>补充笔记</span><textarea id="notesInput"></textarea></label></div></section>
             <section class="detail-tab-panel" data-detail-panel="classification"><div class="classification-grid"><label><span>所属资料</span><select id="sourceSelect"><option value="">未选择</option></select></label><label><span>所属章节</span><select id="chapterSelect"><option value="">未选择</option></select></label><label><span>来源页码</span><input id="sourcePageInput" type="text" maxlength="50" /></label></div></section>
             <section class="formula-history legacy-ocr-panel" aria-labelledby="formulaHistoryTitle">

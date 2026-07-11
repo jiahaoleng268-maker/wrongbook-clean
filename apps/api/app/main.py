@@ -101,6 +101,13 @@ class ChapterCreatePayload(BaseModel):
     sort_order: int = 0
     description: Optional[str] = None
 
+class QuestionBulkUpdatePayload(BaseModel):
+    question_ids: list[int]
+    source_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    status: Optional[str] = None
+
+
 class MistakeTagUpdatePayload(BaseModel):
     names: list[str]
 
@@ -1577,6 +1584,37 @@ async def create_formula_ocr_job(
     finally:
         await file.close()
 
+
+@app.post("/api/questions/bulk-update")
+def bulk_update_questions(payload: QuestionBulkUpdatePayload, db: Session = Depends(get_db)):
+    question_ids = sorted(set(payload.question_ids))
+    if not question_ids or len(question_ids) > 200:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Select between 1 and 200 questions.")
+    if payload.status is not None and payload.status not in ALLOWED_QUESTION_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid question status.")
+    if payload.source_id is not None and db.get(Source, payload.source_id) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_id.")
+    if payload.chapter_id is not None:
+        chapter = db.get(Chapter, payload.chapter_id)
+        if chapter is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chapter_id.")
+        if payload.source_id is not None and chapter.source_id != payload.source_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter does not belong to the selected source.")
+    questions = db.query(Question).filter(Question.id.in_(question_ids)).all()
+    if len(questions) != len(question_ids):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more questions were not found.")
+    for question in questions:
+        if payload.source_id is not None:
+            question.source_id = payload.source_id
+        if payload.chapter_id is not None:
+            chapter = db.get(Chapter, payload.chapter_id)
+            question.chapter_id = chapter.id
+            question.source_id = chapter.source_id
+        if payload.status is not None:
+            question.status = payload.status
+        question.updated_at = utc_now()
+    db.commit()
+    return {"updated_count": len(questions), "question_ids": question_ids}
 
 @app.post("/api/questions/manual", status_code=status.HTTP_201_CREATED)
 async def create_manual_question(

@@ -192,6 +192,28 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertNotEqual(detail["raw_text"], r"\frac{1}{x}")
         formula_jobs = [job for job in detail["ocr_jobs"] if job["engine_name"] == "formula"]
         self.assertEqual(formula_jobs[-1]["raw_text"], r"\frac{1}{x}")
+    def test_source_filters_manual_assignment_and_bulk_update(self) -> None:
+        source = self.request_json("POST", "/api/sources", payload={"name": "线代讲义"})["source"]
+        chapter = self.request_json("POST", "/api/chapters", payload={"source_id": source["source_id"], "name": "矩阵"})["chapter"]
+        first = self.upload_image("bulk-one.png")
+        second = self.upload_image("bulk-two.png")
+        result = self.request_json(
+            "POST",
+            "/api/questions/bulk-update",
+            payload={
+                "question_ids": [first["question_id"], second["question_id"]],
+                "source_id": source["source_id"],
+                "chapter_id": chapter["chapter_id"],
+                "status": "corrected",
+            },
+        )
+        self.assertEqual(result["updated_count"], 2)
+        source_filtered = self.request_json("GET", f"/api/questions?source_id={source['source_id']}")
+        chapter_filtered = self.request_json("GET", f"/api/questions?chapter_id={chapter['chapter_id']}")
+        self.assertEqual(source_filtered["total"], 2)
+        self.assertEqual(chapter_filtered["total"], 2)
+        self.assertTrue(all(item["status"] == "corrected" for item in chapter_filtered["items"]))
+
     def test_source_chapter_and_structured_question_fields(self) -> None:
         source = self.request_json(
             "POST",
@@ -307,7 +329,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v8', service_worker)
+        self.assertIn('wrongbook-web-v9', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

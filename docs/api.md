@@ -691,3 +691,6 @@ Creates a new pending OCR job from the question's first stored image. It keeps p
 - `PATCH /api/questions/{question_id}` accepts `source_id`, `chapter_id`, `source_page`, `answer_text`, `solution_text`, `personal_solution`, `wrong_answer`, `mistake_analysis`, `key_steps`, and `notes`.
 
 Assigning a chapter automatically assigns its source. A chapter from a different selected source is rejected.
+## Question organization filters and bulk update
+
+`GET /api/questions` accepts optional `source_id` and `chapter_id` query parameters. `POST /api/questions/bulk-update` updates up to 200 selected questions with a source, chapter, or status. `POST /api/questions/manual` accepts optional `source_id`, `chapter_id`, and `source_page` multipart fields.
