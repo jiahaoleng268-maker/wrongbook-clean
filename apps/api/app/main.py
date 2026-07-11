@@ -1,22 +1,33 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from secrets import compare_digest
 from typing import Any, Optional
 import json
 import os
+import shutil
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
-from apps.api.app.database import get_db, init_db
-from apps.api.app.models import OCRJob, Question, QuestionAsset, utc_now
+from apps.api.app.database import engine, get_db, init_db
+from apps.api.app.models import (
+    KnowledgePoint,
+    MistakeTag,
+    OCRJob,
+    Question,
+    QuestionAsset,
+    Review,
+    question_knowledge_points,
+    utc_now,
+)
 
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
@@ -30,6 +41,9 @@ ALLOWED_IMAGE_TYPES = {
 }
 DEFAULT_WORKER_NAME = "unknown-worker"
 ALLOWED_QUESTION_STATUSES = {"draft", "recognized", "corrected", "archived"}
+ALLOWED_REVIEW_RESULTS = {"again", "hard", "good", "easy"}
+MAX_MISTAKE_TAGS_PER_QUESTION = 20
+MAX_KNOWLEDGE_POINTS_PER_QUESTION = 30
 
 
 class OCRResultPayload(BaseModel):
@@ -53,6 +67,29 @@ class QuestionUpdatePayload(BaseModel):
     status: Optional[str] = None
 
 
+class MistakeTagUpdatePayload(BaseModel):
+    names: list[str]
+
+
+class KnowledgePointCreatePayload(BaseModel):
+    name: str
+    subject: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class KnowledgePointUpdatePayload(BaseModel):
+    ids: list[int]
+
+
+class ReviewCreatePayload(BaseModel):
+    due_at: datetime
+
+
+class ReviewCompletePayload(BaseModel):
+    result: str
+    next_due_at: Optional[datetime] = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -71,6 +108,38 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/health/details")
+def detailed_health_check():
+    database_ok = False
+    database_error = None
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        database_ok = True
+    except Exception as exc:
+        database_error = str(exc)
+
+    upload_path = UPLOAD_DIR.resolve()
+    upload_parent = upload_path if upload_path.exists() else upload_path.parent
+    uploads_writable = upload_parent.exists() and os.access(upload_parent, os.W_OK)
+    disk = shutil.disk_usage(upload_parent if upload_parent.exists() else Path.cwd())
+    minimum_free_bytes = int(os.getenv("MIN_FREE_DISK_BYTES", str(1024 * 1024 * 1024)))
+    disk_ok = disk.free >= minimum_free_bytes
+    overall_ok = database_ok and uploads_writable and disk_ok
+    return {
+        "status": "ok" if overall_ok else "degraded",
+        "database": {"ok": database_ok, "error": database_error},
+        "uploads": {"path": str(upload_path), "writable": uploads_writable},
+        "disk": {
+            "total_bytes": disk.total,
+            "used_bytes": disk.used,
+            "free_bytes": disk.free,
+            "minimum_free_bytes": minimum_free_bytes,
+            "ok": disk_ok,
+        },
+    }
 
 
 @app.get("/app", include_in_schema=False)
@@ -170,12 +239,101 @@ def _asset_response(asset: QuestionAsset) -> dict:
     }
 
 
+def _knowledge_point_response(point: KnowledgePoint) -> dict:
+    return {
+        "knowledge_point_id": point.id,
+        "subject": point.subject,
+        "name": point.name,
+        "parent_id": point.parent_id,
+        "created_at": point.created_at,
+        "updated_at": point.updated_at,
+    }
+
+
+def _mistake_tag_response(tag: MistakeTag) -> dict:
+    return {
+        "mistake_tag_id": tag.id,
+        "name": tag.name,
+        "created_at": tag.created_at,
+        "updated_at": tag.updated_at,
+    }
+
+
+def _review_response(review: Review) -> dict:
+    return {
+        "review_id": review.id,
+        "question_id": review.question_id,
+        "due_at": review.due_at,
+        "reviewed_at": review.reviewed_at,
+        "result": review.result,
+        "next_due_at": review.next_due_at,
+        "created_at": review.created_at,
+        "updated_at": review.updated_at,
+    }
+
+
+def _normalize_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _normalize_mistake_tag_names(names: list[str]) -> list[str]:
+    if len(names) > MAX_MISTAKE_TAGS_PER_QUESTION:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"A question can have at most {MAX_MISTAKE_TAGS_PER_QUESTION} mistake tags.",
+        )
+
+    normalized_names = []
+    seen_names = set()
+    for raw_name in names:
+        name = raw_name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mistake tag names cannot be empty.",
+            )
+        if len(name) > 255:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mistake tag names cannot exceed 255 characters.",
+            )
+
+        normalized_key = name.casefold()
+        if normalized_key not in seen_names:
+            seen_names.add(normalized_key)
+            normalized_names.append(name)
+
+    return normalized_names
+
+
 def _sorted_assets(question: Question) -> list[QuestionAsset]:
     return sorted(question.assets, key=lambda asset: asset.id)
 
 
 def _sorted_ocr_jobs(question: Question) -> list[OCRJob]:
     return sorted(question.ocr_jobs, key=lambda job: job.id)
+
+
+def _sorted_knowledge_points(question: Question) -> list[KnowledgePoint]:
+    return sorted(
+        question.knowledge_points,
+        key=lambda point: ((point.subject or "").casefold(), point.name.casefold(), point.id),
+    )
+
+
+def _sorted_mistake_tags(question: Question) -> list[MistakeTag]:
+    return sorted(question.mistake_tags, key=lambda tag: (tag.name.casefold(), tag.id))
+
+
+def _sorted_reviews(question: Question) -> list[Review]:
+    return sorted(question.reviews, key=lambda review: (review.due_at, review.id))
+
+
+def _next_pending_review(question: Question) -> Optional[Review]:
+    pending_reviews = [review for review in question.reviews if review.reviewed_at is None]
+    return min(pending_reviews, key=lambda review: (review.due_at, review.id), default=None)
 
 
 def _question_summary_response(question: Question) -> dict:
@@ -197,6 +355,15 @@ def _question_summary_response(question: Question) -> dict:
         "asset_count": len(assets),
         "first_asset": _asset_response(first_asset) if first_asset else None,
         "latest_ocr_job": _job_response(latest_job) if latest_job else None,
+        "knowledge_points": [
+            _knowledge_point_response(point) for point in _sorted_knowledge_points(question)
+        ],
+        "mistake_tags": [_mistake_tag_response(tag) for tag in _sorted_mistake_tags(question)],
+        "next_review": (
+            _review_response(next_review)
+            if (next_review := _next_pending_review(question))
+            else None
+        ),
         "created_at": question.created_at,
         "updated_at": question.updated_at,
     }
@@ -206,7 +373,49 @@ def _question_detail_response(question: Question) -> dict:
     detail = _question_summary_response(question)
     detail["assets"] = [_asset_response(asset) for asset in _sorted_assets(question)]
     detail["ocr_jobs"] = [_job_response(job) for job in _sorted_ocr_jobs(question)]
+    detail["reviews"] = [_review_response(review) for review in _sorted_reviews(question)]
     return detail
+
+
+def _export_filename(question: Question, extension: str) -> str:
+    base = (question.title or f"question-{question.id}").strip()
+    safe = "".join(character if character.isalnum() or character in {"-", "_"} else "-" for character in base)
+    safe = "-".join(part for part in safe.split("-") if part)[:80] or f"question-{question.id}"
+    return f"{safe}.{extension}"
+
+
+def _question_export_payload(question: Question) -> dict:
+    detail = _question_detail_response(question)
+    return {
+        "format": "wrongbook-question",
+        "version": 1,
+        "exported_at": utc_now(),
+        "question": detail,
+    }
+
+
+def _question_markdown(question: Question) -> str:
+    title = question.title or f"错题 #{question.id}"
+    metadata = [
+        ("科目", question.subject or "未设置"),
+        ("题型", question.question_type or "未设置"),
+        ("难度", question.difficulty or "未设置"),
+        ("状态", question.status),
+        ("知识点", "、".join(point.name for point in _sorted_knowledge_points(question)) or "无"),
+        ("错因标签", "、".join(tag.name for tag in _sorted_mistake_tags(question)) or "无"),
+    ]
+    lines = [f"# {title}", "", *[f"- **{label}**：{value}" for label, value in metadata], ""]
+    lines.extend(["## 校正文", "", question.corrected_text or "（暂无校正文）", ""])
+    lines.extend(["## OCR 原文", "", question.raw_text or "（暂无 OCR 原文）", ""])
+    lines.extend(["## 复习记录", ""])
+    reviews = _sorted_reviews(question)
+    if reviews:
+        for review in reviews:
+            reviewed = review.reviewed_at.isoformat() if review.reviewed_at else "待复习"
+            lines.append(f"- {review.due_at.isoformat()} · {review.result or 'pending'} · {reviewed}")
+    else:
+        lines.append("- 暂无复习记录")
+    return "\n".join(lines) + "\n"
 
 
 def _get_ocr_job_or_404(db: Session, job_id: int) -> OCRJob:
@@ -229,6 +438,27 @@ def _get_question_or_404(db: Session, question_id: int) -> Question:
         )
 
     return question
+
+
+def _get_knowledge_point_or_404(db: Session, point_id: int) -> KnowledgePoint:
+    point = db.get(KnowledgePoint, point_id)
+    if not point:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge point not found.",
+        )
+    return point
+
+
+def _get_review_or_404(db: Session, review_id: int) -> Review:
+    review = db.get(Review, review_id)
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found.",
+        )
+
+    return review
 
 
 def _resolve_upload_file_path(stored_file_path: str) -> Path:
@@ -418,6 +648,64 @@ def retry_ocr_job(job_id: int, db: Session = Depends(get_db)):
 
 
 
+@app.get("/api/questions/stats")
+def question_stats(
+    knowledge_limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    total_questions = db.query(func.count(Question.id)).scalar() or 0
+    status_rows = (
+        db.query(Question.status, func.count(Question.id))
+        .group_by(Question.status)
+        .order_by(func.count(Question.id).desc(), Question.status.asc())
+        .all()
+    )
+    subject_label = func.coalesce(func.nullif(func.trim(Question.subject), ""), "Uncategorized")
+    subject_rows = (
+        db.query(subject_label.label("subject"), func.count(Question.id).label("count"))
+        .group_by(subject_label)
+        .order_by(func.count(Question.id).desc(), subject_label.asc())
+        .all()
+    )
+    knowledge_rows = (
+        db.query(
+            KnowledgePoint.id,
+            KnowledgePoint.name,
+            KnowledgePoint.subject,
+            func.count(question_knowledge_points.c.question_id).label("question_count"),
+        )
+        .outerjoin(
+            question_knowledge_points,
+            question_knowledge_points.c.knowledge_point_id == KnowledgePoint.id,
+        )
+        .group_by(KnowledgePoint.id, KnowledgePoint.name, KnowledgePoint.subject)
+        .order_by(
+            func.count(question_knowledge_points.c.question_id).desc(),
+            func.lower(KnowledgePoint.name).asc(),
+            KnowledgePoint.id.asc(),
+        )
+        .limit(knowledge_limit)
+        .all()
+    )
+    return {
+        "total_questions": total_questions,
+        "status_counts": {status_name: count for status_name, count in status_rows},
+        "subject_counts": [
+            {"subject": subject_name, "question_count": count}
+            for subject_name, count in subject_rows
+        ],
+        "top_knowledge_points": [
+            {
+                "knowledge_point_id": point_id,
+                "name": name,
+                "subject": subject,
+                "question_count": question_count,
+            }
+            for point_id, name, subject, question_count in knowledge_rows
+        ],
+    }
+
+
 @app.get("/api/questions")
 def list_questions(
     status_filter: Optional[str] = Query(default=None, alias="status"),
@@ -462,9 +750,394 @@ def list_questions(
     }
 
 
+@app.get("/api/knowledge-points")
+def list_knowledge_points(
+    subject: Optional[str] = Query(default=None),
+    parent_id: Optional[int] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(KnowledgePoint)
+    if subject and subject.strip():
+        query = query.filter(func.lower(KnowledgePoint.subject) == subject.strip().casefold())
+    if parent_id is not None:
+        query = query.filter(KnowledgePoint.parent_id == parent_id)
+    if q and q.strip():
+        query = query.filter(KnowledgePoint.name.ilike(f"%{q.strip()}%"))
+
+    total = query.count()
+    points = (
+        query.order_by(
+            func.lower(KnowledgePoint.subject),
+            func.lower(KnowledgePoint.name),
+            KnowledgePoint.id,
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [_knowledge_point_response(point) for point in points],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.post("/api/knowledge-points", status_code=status.HTTP_201_CREATED)
+def create_knowledge_point(
+    payload: KnowledgePointCreatePayload,
+    db: Session = Depends(get_db),
+):
+    name = payload.name.strip()
+    subject = payload.subject.strip() if payload.subject else None
+    subject = subject or None
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Knowledge point name cannot be empty.")
+    if len(name) > 255:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Knowledge point name cannot exceed 255 characters.")
+    if subject and len(subject) > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Knowledge point subject cannot exceed 100 characters.")
+
+    parent = None
+    if payload.parent_id is not None:
+        parent = _get_knowledge_point_or_404(db, payload.parent_id)
+        if parent.subject != subject:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Parent and child knowledge points must use the same subject.",
+            )
+
+    duplicate_query = db.query(KnowledgePoint).filter(func.lower(KnowledgePoint.name) == name.casefold())
+    duplicate_query = (
+        duplicate_query.filter(KnowledgePoint.subject.is_(None))
+        if subject is None
+        else duplicate_query.filter(func.lower(KnowledgePoint.subject) == subject.casefold())
+    )
+    if duplicate_query.first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Knowledge point already exists for this subject.")
+
+    point = KnowledgePoint(name=name, subject=subject, parent=parent)
+    db.add(point)
+    db.commit()
+    db.refresh(point)
+    return {"knowledge_point": _knowledge_point_response(point)}
+
+
+@app.put("/api/questions/{question_id}/knowledge-points")
+def replace_question_knowledge_points(
+    question_id: int,
+    payload: KnowledgePointUpdatePayload,
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    unique_ids = list(dict.fromkeys(payload.ids))
+    if len(unique_ids) > MAX_KNOWLEDGE_POINTS_PER_QUESTION:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"A question can have at most {MAX_KNOWLEDGE_POINTS_PER_QUESTION} knowledge points.",
+        )
+
+    points = []
+    if unique_ids:
+        points = db.query(KnowledgePoint).filter(KnowledgePoint.id.in_(unique_ids)).all()
+        found_ids = {point.id for point in points}
+        missing_ids = [point_id for point_id in unique_ids if point_id not in found_ids]
+        if missing_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Knowledge point not found: {missing_ids[0]}.",
+            )
+        points.sort(key=lambda point: unique_ids.index(point.id))
+
+    question.knowledge_points = points
+    question.updated_at = utc_now()
+    db.commit()
+    db.refresh(question)
+    return {"question": _question_detail_response(question)}
+
+
+@app.get("/api/mistake-tags")
+def list_mistake_tags(
+    q: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(MistakeTag)
+    if q and q.strip():
+        query = query.filter(MistakeTag.name.ilike(f"%{q.strip()}%"))
+
+    total = query.count()
+    tags = (
+        query.order_by(func.lower(MistakeTag.name), MistakeTag.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [_mistake_tag_response(tag) for tag in tags],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.put("/api/questions/{question_id}/mistake-tags")
+def replace_question_mistake_tags(
+    question_id: int,
+    payload: MistakeTagUpdatePayload,
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    names = _normalize_mistake_tag_names(payload.names)
+    tags = []
+    for name in names:
+        tag = (
+            db.query(MistakeTag)
+            .filter(func.lower(MistakeTag.name) == name.casefold())
+            .first()
+        )
+        if not tag:
+            tag = MistakeTag(name=name)
+            db.add(tag)
+            db.flush()
+        tags.append(tag)
+
+    question.mistake_tags = tags
+    question.updated_at = utc_now()
+    db.commit()
+    db.refresh(question)
+    return {"question": _question_detail_response(question)}
+
+
+@app.post("/api/questions/{question_id}/reviews", status_code=status.HTTP_201_CREATED)
+def create_review(
+    question_id: int,
+    payload: ReviewCreatePayload,
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    pending_review = (
+        db.query(Review)
+        .filter(Review.question_id == question_id, Review.reviewed_at.is_(None))
+        .order_by(Review.due_at.asc(), Review.id.asc())
+        .first()
+    )
+    if pending_review:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Question already has a pending review.",
+        )
+
+    review = Review(question_id=question.id, due_at=_normalize_datetime(payload.due_at))
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return {"review": _review_response(review)}
+
+
+@app.get("/api/reviews/history")
+def review_history(
+    result: Optional[str] = Query(default=None),
+    question_id: Optional[int] = Query(default=None),
+    reviewed_from: Optional[datetime] = Query(default=None),
+    reviewed_to: Optional[datetime] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    if result is not None and result not in ALLOWED_REVIEW_RESULTS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid review result.")
+    start = _normalize_datetime(reviewed_from) if reviewed_from else None
+    end = _normalize_datetime(reviewed_to) if reviewed_to else None
+    if start and end and start > end:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reviewed_from must not be later than reviewed_to.")
+
+    query = db.query(Review).filter(Review.reviewed_at.is_not(None))
+    if result:
+        query = query.filter(Review.result == result)
+    if question_id is not None:
+        query = query.filter(Review.question_id == question_id)
+    if start:
+        query = query.filter(Review.reviewed_at >= start)
+    if end:
+        query = query.filter(Review.reviewed_at <= end)
+
+    total = query.count()
+    reviews = query.order_by(Review.reviewed_at.desc(), Review.id.desc()).offset(offset).limit(limit).all()
+    items = []
+    for review in reviews:
+        item = _review_response(review)
+        item["question"] = _question_summary_response(review.question)
+        items.append(item)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/reviews/stats")
+def review_stats(
+    now: Optional[datetime] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    current = _normalize_datetime(now) if now else utc_now()
+    today_start = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+    seven_day_start = today_start - timedelta(days=6)
+
+    due_count = db.query(Review).filter(
+        Review.reviewed_at.is_(None),
+        Review.due_at <= current,
+    ).count()
+    completed_today = db.query(Review).filter(
+        Review.reviewed_at >= today_start,
+        Review.reviewed_at < tomorrow_start,
+    ).count()
+    recent_reviews = db.query(Review).filter(
+        Review.reviewed_at >= seven_day_start,
+        Review.reviewed_at < tomorrow_start,
+    ).all()
+    result_counts = {result: 0 for result in sorted(ALLOWED_REVIEW_RESULTS)}
+    for review in recent_reviews:
+        if review.result in result_counts:
+            result_counts[review.result] += 1
+    completed_seven_days = len(recent_reviews)
+    mastered_count = result_counts["good"] + result_counts["easy"]
+    mastered_rate = mastered_count / completed_seven_days if completed_seven_days else None
+
+    return {
+        "as_of": current,
+        "due_count": due_count,
+        "completed_today": completed_today,
+        "completed_seven_days": completed_seven_days,
+        "result_counts_seven_days": result_counts,
+        "mastered_rate_seven_days": mastered_rate,
+    }
+
+
+@app.get("/api/reviews/due")
+def list_due_reviews(
+    before: Optional[datetime] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    due_before = _normalize_datetime(before) if before else utc_now()
+    query = db.query(Review).filter(
+        Review.reviewed_at.is_(None),
+        Review.due_at <= due_before,
+    )
+    total = query.count()
+    reviews = query.order_by(Review.due_at.asc(), Review.id.asc()).offset(offset).limit(limit).all()
+    items = []
+    for review in reviews:
+        item = _review_response(review)
+        item["question"] = _question_summary_response(review.question)
+        items.append(item)
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "before": due_before,
+    }
+
+
+@app.post("/api/reviews/{review_id}/complete")
+def complete_review(
+    review_id: int,
+    payload: ReviewCompletePayload,
+    db: Session = Depends(get_db),
+):
+    review = _get_review_or_404(db, review_id)
+    if review.reviewed_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Review is already completed.",
+        )
+    if payload.result not in ALLOWED_REVIEW_RESULTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid review result.",
+        )
+
+    reviewed_at = utc_now()
+    next_due_at = _normalize_datetime(payload.next_due_at) if payload.next_due_at else None
+    if next_due_at is not None and next_due_at <= reviewed_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="next_due_at must be later than the completion time.",
+        )
+
+    review.reviewed_at = reviewed_at
+    review.result = payload.result
+    review.next_due_at = next_due_at
+    review.updated_at = reviewed_at
+
+    next_review = None
+    if next_due_at is not None:
+        next_review = Review(question_id=review.question_id, due_at=next_due_at)
+        db.add(next_review)
+
+    db.commit()
+    db.refresh(review)
+    if next_review:
+        db.refresh(next_review)
+
+    return {
+        "review": _review_response(review),
+        "next_review": _review_response(next_review) if next_review else None,
+    }
+
+
 @app.get("/api/questions/{question_id}")
 def get_question(question_id: int, db: Session = Depends(get_db)):
     question = _get_question_or_404(db, question_id)
+    return {"question": _question_detail_response(question)}
+
+
+@app.get("/api/questions/{question_id}/export")
+def export_question(
+    question_id: int,
+    format: str = Query(default="json", pattern="^(json|markdown)$"),
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    if format == "markdown":
+        return PlainTextResponse(
+            _question_markdown(question),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{_export_filename(question, "md")}"'},
+        )
+    return JSONResponse(
+        jsonable_encoder(_question_export_payload(question)),
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename(question, "json")}"'},
+    )
+
+
+@app.post("/api/questions/{question_id}/archive")
+def archive_question(question_id: int, db: Session = Depends(get_db)):
+    question = _get_question_or_404(db, question_id)
+    if question.status == "archived":
+        return {"question": _question_detail_response(question)}
+    question.status = "archived"
+    question.updated_at = utc_now()
+    db.commit()
+    db.refresh(question)
+    return {"question": _question_detail_response(question)}
+
+
+@app.post("/api/questions/{question_id}/restore")
+def restore_question(question_id: int, db: Session = Depends(get_db)):
+    question = _get_question_or_404(db, question_id)
+    if question.status != "archived":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Question is not archived.")
+    question.status = "corrected"
+    question.updated_at = utc_now()
+    db.commit()
+    db.refresh(question)
     return {"question": _question_detail_response(question)}
 
 

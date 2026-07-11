@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/app/static/app.css" />
   </head>
   <body>
+    <a class="skip-link" href="#mainContent">跳到主要内容</a>
     <header class="top-bar">
       <div>
         <p class="eyebrow">WrongBook</p>
@@ -18,11 +19,11 @@
       <button class="ghost-button" id="refreshButton" type="button">刷新</button>
     </header>
 
-    <main class="app-shell">
+    <main id="mainContent" class="app-shell" tabindex="-1">
       <section class="upload-panel" aria-labelledby="uploadTitle">
         <div class="section-heading">
           <h2 id="uploadTitle">上传错题</h2>
-          <span id="uploadState" class="state-text">等待图片</span>
+          <span id="uploadState" class="state-text" role="status" aria-live="polite">等待图片</span>
         </div>
         <form id="uploadForm" class="upload-form">
           <label class="file-picker">
@@ -33,11 +34,73 @@
         </form>
       </section>
 
+      <section class="review-panel" aria-labelledby="dueReviewTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Review</p>
+            <h2 id="dueReviewTitle">今日复习</h2>
+          </div>
+          <span id="dueReviewCount" class="state-text" role="status" aria-live="polite">0 条</span>
+        </div>
+        <div id="reviewStats" class="review-stats" aria-label="复习统计">
+          <div><strong id="statsDueCount">0</strong><span>当前到期</span></div>
+          <div><strong id="statsTodayCount">0</strong><span>今日完成</span></div>
+          <div><strong id="statsWeekCount">0</strong><span>近 7 天</span></div>
+          <div><strong id="statsMasteredRate">--</strong><span>掌握率</span></div>
+          <div><strong id="statsResultSummary">0 / 0 / 0 / 0</strong><span>再来 / 难 / 掌握 / 简单</span></div>
+        </div>
+        <div id="reviewStatsStatus" class="inline-status" role="status" aria-live="polite"></div>
+        <div id="dueReviewStatus" class="inline-status" role="status" aria-live="polite"></div>
+        <div id="dueReviewList" class="due-review-list"></div>
+      </section>
+
+      <section class="review-history-panel" aria-labelledby="reviewHistoryTitle">
+        <div class="section-heading">
+          <div><p class="eyebrow">History</p><h2 id="reviewHistoryTitle">复习历史</h2></div>
+          <span id="reviewHistoryCount" class="state-text" role="status" aria-live="polite">0 条</span>
+        </div>
+        <div class="history-filters">
+          <select id="reviewHistoryResultFilter" aria-label="复习结果筛选">
+            <option value="">全部结果</option>
+            <option value="again">再来一次</option>
+            <option value="hard">困难</option>
+            <option value="good">掌握</option>
+            <option value="easy">简单</option>
+          </select>
+          <input id="reviewHistoryFromInput" type="date" aria-label="开始日期" />
+          <input id="reviewHistoryToInput" type="date" aria-label="结束日期" />
+          <button id="reviewHistoryFilterButton" class="ghost-button" type="button">筛选</button>
+        </div>
+        <div id="reviewHistoryStatus" class="inline-status" role="status" aria-live="polite"></div>
+        <div id="reviewHistoryList" class="review-history-list"></div>
+        <div class="pagination-controls">
+          <button id="reviewHistoryPreviousButton" class="ghost-button" type="button">上一页</button>
+          <span id="reviewHistoryPageText" class="state-text" role="status" aria-live="polite">第 1 页</span>
+          <button id="reviewHistoryNextButton" class="ghost-button" type="button">下一页</button>
+        </div>
+      </section>
+
+      <section class="library-stats-panel" aria-labelledby="libraryStatsTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Library</p>
+            <h2 id="libraryStatsTitle">题库概览</h2>
+          </div>
+          <strong id="libraryTotalCount">0 题</strong>
+        </div>
+        <div id="libraryStatsStatus" class="inline-status" role="status" aria-live="polite"></div>
+        <div class="library-stats-grid">
+          <div><h3>状态</h3><div id="libraryStatusStats" class="compact-stat-list"></div></div>
+          <div><h3>科目</h3><div id="librarySubjectStats" class="compact-stat-list"></div></div>
+          <div><h3>热门知识点</h3><div id="libraryKnowledgeStats" class="compact-stat-list"></div></div>
+        </div>
+      </section>
+
       <section class="workbench" aria-label="错题工作区">
         <aside class="question-column">
           <div class="section-heading">
             <h2>错题列表</h2>
-            <span id="listCount" class="state-text">0 条</span>
+            <span id="listCount" class="state-text" role="status" aria-live="polite">0 条</span>
           </div>
 
           <div class="filters">
@@ -51,8 +114,13 @@
             </select>
           </div>
 
-          <div id="listStatus" class="inline-status"></div>
+          <div id="listStatus" class="inline-status" role="status" aria-live="polite"></div>
           <div id="questionList" class="question-list" role="list"></div>
+          <div class="pagination-controls">
+            <button id="questionPreviousButton" class="ghost-button" type="button">上一页</button>
+            <span id="questionPageText" class="state-text" role="status" aria-live="polite">第 1 页</span>
+            <button id="questionNextButton" class="ghost-button" type="button">下一页</button>
+          </div>
         </aside>
 
         <section class="detail-column" aria-labelledby="detailTitle">
@@ -70,7 +138,7 @@
               <button id="saveButton" class="primary-button" type="submit">保存</button>
             </div>
 
-            <div id="detailStatus" class="inline-status"></div>
+            <div id="detailStatus" class="inline-status" role="status" aria-live="polite"></div>
 
             <div class="detail-grid">
               <div class="image-frame">
@@ -122,9 +190,45 @@
               </label>
             </div>
 
+            <section class="learning-panel" aria-label="错因与复习计划">
+              <div class="learning-block knowledge-point-block">
+                <span>知识点</span>
+                <div id="knowledgePointList" class="knowledge-point-list"></div>
+                <div class="knowledge-point-create">
+                  <input id="knowledgePointNameInput" type="text" maxlength="255" placeholder="新知识点名称" />
+                  <input id="knowledgePointSubjectInput" type="text" maxlength="100" placeholder="科目（可选）" />
+                  <button id="createKnowledgePointButton" class="ghost-button" type="button">新建知识点</button>
+                </div>
+                <span id="knowledgePointState" class="state-text" role="status" aria-live="polite"></span>
+              </div>
+              <label class="learning-block">
+                <span>错因标签</span>
+                <input id="mistakeTagsInput" type="text" list="mistakeTagSuggestions" placeholder="计算错误, 概念不清, 审题错误" />
+                <datalist id="mistakeTagSuggestions"></datalist>
+                <small>使用逗号分隔，保存题目时一并更新。</small>
+              </label>
+              <div class="learning-block">
+                <span>下一次复习</span>
+                <p id="nextReviewText" class="review-time">尚未安排</p>
+                <div id="scheduleReviewControls" class="schedule-review-controls">
+                  <input id="reviewDueAtInput" type="datetime-local" aria-label="复习时间" />
+                  <button id="scheduleReviewButton" class="ghost-button" type="button">安排复习</button>
+                </div>
+                <span id="reviewScheduleState" class="state-text" role="status" aria-live="polite"></span>
+              </div>
+            </section>
+
             <div class="detail-actions">
+              <div class="export-actions">
+                <button id="exportJsonButton" class="ghost-button" type="button">导出 JSON</button>
+                <button id="exportMarkdownButton" class="ghost-button" type="button">导出 Markdown</button>
+              </div>
+              <div class="archive-actions">
+                <button id="archiveQuestionButton" class="danger-button" type="button">归档题目</button>
+                <button id="restoreQuestionButton" class="ghost-button" type="button" hidden>恢复题目</button>
+              </div>
               <button id="copyRawButton" class="ghost-button" type="button">采用 OCR</button>
-              <span id="saveState" class="state-text">未修改</span>
+              <span id="saveState" class="state-text" role="status" aria-live="polite">未修改</span>
             </div>
           </form>
         </section>

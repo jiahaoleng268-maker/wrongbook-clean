@@ -164,6 +164,26 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("text/html", content_type)
         self.assertIn("WrongBook", html)
         self.assertIn('id="uploadForm"', html)
+        self.assertIn('id="knowledgePointList"', html)
+        self.assertIn('id="createKnowledgePointButton"', html)
+        self.assertIn('id="mistakeTagsInput"', html)
+        self.assertIn('id="scheduleReviewButton"', html)
+        self.assertIn('id="dueReviewList"', html)
+        self.assertIn('id="questionPreviousButton"', html)
+        self.assertIn('id="questionNextButton"', html)
+        self.assertIn('id="reviewHistoryPreviousButton"', html)
+        self.assertIn('id="reviewHistoryNextButton"', html)
+        self.assertIn('id="reviewHistoryTitle"', html)
+        self.assertIn('class="skip-link"', html)
+        self.assertIn('id="mainContent"', html)
+        self.assertIn('id="exportJsonButton"', html)
+        self.assertIn('id="exportMarkdownButton"', html)
+        self.assertIn('id="archiveQuestionButton"', html)
+        self.assertIn('id="restoreQuestionButton"', html)
+        self.assertIn('id="libraryStatsTitle"', html)
+        self.assertIn('id="libraryKnowledgeStats"', html)
+        self.assertIn('id="reviewStats"', html)
+        self.assertIn('id="statsMasteredRate"', html)
 
         fallback_html, _ = self.request_text("GET", "/app/questions/1")
         self.assertIn("WrongBook", fallback_html)
@@ -175,6 +195,25 @@ class WrongBookIntegrationTest(unittest.TestCase):
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)
         self.assertIn("/api/questions/upload", javascript)
+        self.assertIn("/api/questions/stats", javascript)
+        self.assertIn("/export?format=", javascript)
+        self.assertIn("setupKeyboardShortcuts", javascript)
+        self.assertIn("requestSubmit", javascript)
+        self.assertIn("questionOffset", javascript)
+        self.assertIn("historyOffset", javascript)
+        self.assertIn("questionPages", javascript)
+        self.assertIn("historyPages", javascript)
+        self.assertIn("/api/knowledge-points", javascript)
+        self.assertIn("/knowledge-points", javascript)
+        self.assertIn("/api/mistake-tags", javascript)
+        self.assertIn("/mistake-tags", javascript)
+        self.assertIn("/api/reviews/history", javascript)
+        self.assertIn('handleArchiveAction("archive")', javascript)
+        self.assertIn('handleArchiveAction("restore")', javascript)
+        self.assertIn("/api/reviews/due", javascript)
+        self.assertIn("/api/reviews/stats", javascript)
+        self.assertIn("/reviews", javascript)
+        self.assertIn("/complete", javascript)
         self.assertIn("serviceWorker", javascript)
 
         manifest = self.request_json("GET", "/app/static/manifest.webmanifest")
@@ -316,6 +355,275 @@ class WrongBookIntegrationTest(unittest.TestCase):
                 "PATCH",
                 f"/api/questions/{upload['question_id']}",
                 payload={"status": "bad-status"},
+            )
+        self.assertEqual(error.exception.code, 400)
+
+    def test_question_export_formats(self) -> None:
+        upload = self.upload_image("export.png")
+        question_id = upload["question_id"]
+        self.request_json(
+            "PATCH",
+            f"/api/questions/{question_id}",
+            payload={"title": "Derivative / Practice", "subject": "Math", "corrected_text": "f(x)=xe^x"},
+        )
+
+        json_request = urllib.request.Request(f"{self.base_url}/api/questions/{question_id}/export?format=json")
+        with urllib.request.urlopen(json_request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            self.assertIn("attachment", response.headers["Content-Disposition"])
+        self.assertEqual(payload["format"], "wrongbook-question")
+        self.assertEqual(payload["question"]["corrected_text"], "f(x)=xe^x")
+
+        markdown, content_type = self.request_text(
+            "GET",
+            f"/api/questions/{question_id}/export?format=markdown",
+        )
+        self.assertIn("text/markdown", content_type)
+        self.assertIn("# Derivative / Practice", markdown)
+        self.assertIn("## 校正文", markdown)
+        self.assertIn("f(x)=xe^x", markdown)
+
+    def test_detailed_health_and_api_pagination(self) -> None:
+        health = self.request_json("GET", "/health/details")
+        self.assertEqual(health["status"], "ok")
+        self.assertTrue(health["database"]["ok"])
+        self.assertTrue(health["uploads"]["writable"])
+        self.assertTrue(health["disk"]["ok"])
+        self.assertGreater(health["disk"]["free_bytes"], 0)
+
+        first = self.upload_image("page-one.png")
+        second = self.upload_image("page-two.png")
+        page = self.request_json("GET", "/api/questions?limit=1&offset=1")
+        self.assertEqual(page["total"], 2)
+        self.assertEqual(len(page["items"]), 1)
+        self.assertEqual(page["offset"], 1)
+        self.assertIn(page["items"][0]["question_id"], {first["question_id"], second["question_id"]})
+
+    def test_archive_and_review_history_flow(self) -> None:
+        upload = self.upload_image("archive-history.png")
+        question_id = upload["question_id"]
+
+        with self.assertRaises(urllib.error.HTTPError) as restore_error:
+            self.request_json("POST", f"/api/questions/{question_id}/restore")
+        self.assertEqual(restore_error.exception.code, 409)
+
+        archived = self.request_json("POST", f"/api/questions/{question_id}/archive")["question"]
+        self.assertEqual(archived["status"], "archived")
+        archived_again = self.request_json("POST", f"/api/questions/{question_id}/archive")["question"]
+        self.assertEqual(archived_again["status"], "archived")
+        restored = self.request_json("POST", f"/api/questions/{question_id}/restore")["question"]
+        self.assertEqual(restored["status"], "corrected")
+
+        review = self.request_json(
+            "POST",
+            f"/api/questions/{question_id}/reviews",
+            payload={"due_at": "2026-07-10T09:00:00Z"},
+        )["review"]
+        self.request_json(
+            "POST",
+            f"/api/reviews/{review['review_id']}/complete",
+            payload={"result": "hard"},
+        )
+        history = self.request_json(
+            "GET",
+            f"/api/reviews/history?result=hard&question_id={question_id}",
+        )
+        self.assertEqual(history["total"], 1)
+        self.assertEqual(history["items"][0]["result"], "hard")
+        self.assertEqual(history["items"][0]["question"]["question_id"], question_id)
+        empty = self.request_json("GET", "/api/reviews/history?result=easy")
+        self.assertEqual(empty["total"], 0)
+
+    def test_question_statistics(self) -> None:
+        first = self.upload_image("library-one.png")
+        second = self.upload_image("library-two.png")
+        third = self.upload_image("library-three.png")
+        self.request_json("PATCH", f"/api/questions/{first['question_id']}", payload={"subject": "Math", "status": "corrected"})
+        self.request_json("PATCH", f"/api/questions/{second['question_id']}", payload={"subject": "Math"})
+        point = self.request_json(
+            "POST",
+            "/api/knowledge-points",
+            payload={"name": "Algebra", "subject": "Math"},
+        )["knowledge_point"]
+        self.request_json(
+            "PUT",
+            f"/api/questions/{first['question_id']}/knowledge-points",
+            payload={"ids": [point["knowledge_point_id"]]},
+        )
+        self.request_json(
+            "PUT",
+            f"/api/questions/{second['question_id']}/knowledge-points",
+            payload={"ids": [point["knowledge_point_id"]]},
+        )
+
+        stats = self.request_json("GET", "/api/questions/stats")
+        self.assertEqual(stats["total_questions"], 3)
+        self.assertEqual(stats["status_counts"]["corrected"], 1)
+        self.assertEqual(stats["status_counts"]["draft"], 2)
+        self.assertEqual(stats["subject_counts"][0], {"subject": "Math", "question_count": 2})
+        self.assertEqual(stats["subject_counts"][1], {"subject": "Uncategorized", "question_count": 1})
+        self.assertEqual(stats["top_knowledge_points"][0]["name"], "Algebra")
+        self.assertEqual(stats["top_knowledge_points"][0]["question_count"], 2)
+
+    def test_review_statistics(self) -> None:
+        first = self.upload_image("stats-one.png")
+        second = self.upload_image("stats-two.png")
+        now = "2026-07-11T12:00:00Z"
+        old_due = "2026-07-10T09:00:00Z"
+
+        first_review = self.request_json(
+            "POST",
+            f"/api/questions/{first['question_id']}/reviews",
+            payload={"due_at": old_due},
+        )["review"]
+        self.request_json(
+            "POST",
+            f"/api/reviews/{first_review['review_id']}/complete",
+            payload={"result": "good"},
+        )
+        self.request_json(
+            "POST",
+            f"/api/questions/{second['question_id']}/reviews",
+            payload={"due_at": old_due},
+        )
+
+        stats = self.request_json("GET", f"/api/reviews/stats?now={now}")
+        self.assertEqual(stats["due_count"], 1)
+        self.assertEqual(stats["completed_seven_days"], 1)
+        self.assertEqual(stats["result_counts_seven_days"]["good"], 1)
+        self.assertEqual(stats["result_counts_seven_days"]["again"], 0)
+        self.assertEqual(stats["mastered_rate_seven_days"], 1.0)
+
+    def test_knowledge_point_management_flow(self) -> None:
+        upload = self.upload_image("knowledge.png")
+        question_id = upload["question_id"]
+
+        algebra = self.request_json(
+            "POST",
+            "/api/knowledge-points",
+            payload={"name": " Algebra ", "subject": " Mathematics "},
+        )["knowledge_point"]
+        quadratic = self.request_json(
+            "POST",
+            "/api/knowledge-points",
+            payload={
+                "name": "Quadratic Functions",
+                "subject": "Mathematics",
+                "parent_id": algebra["knowledge_point_id"],
+            },
+        )["knowledge_point"]
+        self.assertEqual(algebra["name"], "Algebra")
+        self.assertEqual(algebra["subject"], "Mathematics")
+        self.assertEqual(quadratic["parent_id"], algebra["knowledge_point_id"])
+
+        listed = self.request_json(
+            "GET",
+            "/api/knowledge-points?subject=mathematics&q=quadratic",
+        )
+        self.assertEqual(listed["total"], 1)
+        self.assertEqual(listed["items"][0]["knowledge_point_id"], quadratic["knowledge_point_id"])
+
+        with self.assertRaises(urllib.error.HTTPError) as duplicate_error:
+            self.request_json(
+                "POST",
+                "/api/knowledge-points",
+                payload={"name": "algebra", "subject": "MATHEMATICS"},
+            )
+        self.assertEqual(duplicate_error.exception.code, 409)
+
+        assigned = self.request_json(
+            "PUT",
+            f"/api/questions/{question_id}/knowledge-points",
+            payload={
+                "ids": [
+                    quadratic["knowledge_point_id"],
+                    algebra["knowledge_point_id"],
+                    quadratic["knowledge_point_id"],
+                ]
+            },
+        )["question"]
+        self.assertEqual(
+            [point["name"] for point in assigned["knowledge_points"]],
+            ["Algebra", "Quadratic Functions"],
+        )
+
+        detail = self.request_json("GET", f"/api/questions/{question_id}")["question"]
+        self.assertEqual(len(detail["knowledge_points"]), 2)
+
+        with self.assertRaises(urllib.error.HTTPError) as missing_error:
+            self.request_json(
+                "PUT",
+                f"/api/questions/{question_id}/knowledge-points",
+                payload={"ids": [999999]},
+            )
+        self.assertEqual(missing_error.exception.code, 404)
+
+    def test_mistake_tags_and_review_schedule_flow(self) -> None:
+        upload = self.upload_image("review.png")
+        question_id = upload["question_id"]
+
+        tagged = self.request_json(
+            "PUT",
+            f"/api/questions/{question_id}/mistake-tags",
+            payload={"names": ["calculation", "concept", "Calculation"]},
+        )["question"]
+        self.assertEqual(
+            [tag["name"] for tag in tagged["mistake_tags"]],
+            ["calculation", "concept"],
+        )
+
+        tags = self.request_json("GET", "/api/mistake-tags?q=calc")
+        self.assertEqual(tags["total"], 1)
+        self.assertEqual(tags["items"][0]["name"], "calculation")
+
+        review = self.request_json(
+            "POST",
+            f"/api/questions/{question_id}/reviews",
+            payload={"due_at": "2026-01-01T00:00:00Z"},
+        )["review"]
+        self.assertEqual(review["question_id"], question_id)
+        self.assertIsNone(review["reviewed_at"])
+
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.request_json(
+                "POST",
+                f"/api/questions/{question_id}/reviews",
+                payload={"due_at": "2026-01-02T00:00:00Z"},
+            )
+        self.assertEqual(error.exception.code, 409)
+
+        due = self.request_json("GET", "/api/reviews/due?before=2026-01-03T00:00:00Z")
+        self.assertEqual(due["total"], 1)
+        self.assertEqual(due["items"][0]["review_id"], review["review_id"])
+        self.assertEqual(due["items"][0]["question"]["question_id"], question_id)
+
+        completed = self.request_json(
+            "POST",
+            f"/api/reviews/{review['review_id']}/complete",
+            payload={
+                "result": "good",
+                "next_due_at": "2030-01-01T00:00:00Z",
+            },
+        )
+        self.assertEqual(completed["review"]["result"], "good")
+        self.assertIsNotNone(completed["review"]["reviewed_at"])
+        self.assertEqual(completed["next_review"]["question_id"], question_id)
+
+        due_after_completion = self.request_json(
+            "GET",
+            "/api/reviews/due?before=2026-01-03T00:00:00Z",
+        )
+        self.assertEqual(due_after_completion["total"], 0)
+
+        detail = self.request_json("GET", f"/api/questions/{question_id}")["question"]
+        self.assertEqual(len(detail["reviews"]), 2)
+        self.assertEqual(detail["next_review"]["review_id"], completed["next_review"]["review_id"])
+
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.request_json(
+                "POST",
+                f"/api/reviews/{completed['next_review']['review_id']}/complete",
+                payload={"result": "invalid"},
             )
         self.assertEqual(error.exception.code, 400)
 
