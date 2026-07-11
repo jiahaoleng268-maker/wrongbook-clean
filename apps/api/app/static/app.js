@@ -656,14 +656,15 @@
       });
       elements.statusFilter.value = "";
       elements.uploadForm.reset();
-      elements.fileLabel.textContent = "拍照或选择图片";
-      setStateText(elements.uploadState, `已上传，OCR 任务 #${upload.ocr_job_id}`, "success");
+      state.selectedImageFile = null;
+      elements.selectedImageName.textContent = "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
+      setStateText(elements.uploadState, `\u5df2\u4e0a\u4f20\uff0cOCR \u4efb\u52a1 #${upload.ocr_job_id}`, "success");
       await loadQuestions();
       await selectQuestion(upload.question_id);
     } catch (error) {
       setStateText(elements.uploadState, error.message, "error");
     } finally {
-      elements.uploadButton.disabled = false;
+      elements.uploadButton.disabled = !state.selectedImageFile;
     }
   }
 

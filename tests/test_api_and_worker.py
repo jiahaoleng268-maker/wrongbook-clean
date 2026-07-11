@@ -230,6 +230,9 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("serviceWorker", javascript)
         self.assertIn("switchView", javascript)
         self.assertIn("selectedImageFile", javascript)
+        self.assertNotIn("elements.fileLabel", javascript)
+        self.assertIn("elements.selectedImageName.textContent", javascript)
+        self.assertIn("elements.uploadButton.disabled = !state.selectedImageFile", javascript)
         self.assertIn("galleryInput", javascript)
 
         manifest = self.request_json("GET", "/app/static/manifest.webmanifest")
