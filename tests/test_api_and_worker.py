@@ -1,4 +1,5 @@
-﻿import json
+﻿import importlib.util
+import json
 import os
 import socket
 import subprocess
@@ -255,7 +256,12 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertEqual(job["raw_text"], "mock OCR text from worker")
         self.assertIn('"downloaded_bytes"', job["raw_json"])
 
-    def test_paddle_engine_placeholder_fails_pending_job(self) -> None:
+    @unittest.skipIf(
+        importlib.util.find_spec("paddleocr") is not None
+        and importlib.util.find_spec("paddle") is not None,
+        "PaddleOCR is installed; missing-dependency failure path is not active.",
+    )
+    def test_paddle_engine_missing_dependencies_fail_pending_job(self) -> None:
         upload = self.upload_image("paddle.png")
 
         env = self.env.copy()

@@ -21,19 +21,21 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - focused integration tests added for upload, asset download, OCR jobs, and mock Worker flow
 - selectable OCR engine layer added to the Worker
 - `OCR_ENGINE=paddle` placeholder mode added with clear failed-job setup errors
+- PaddlePaddle GPU and PaddleOCR installed and verified on the Windows laptop
+- real local PaddleOCR engine wired behind `OCR_ENGINE=paddle`
 
 ## Current Task
 
-- prepare real PaddleOCR installation and model wiring on the Windows laptop
-- keep `OCR_ENGINE=mock` as the default until PaddleOCR is verified locally
+- verify full upload-to-real-PaddleOCR Worker flow against the local backend
+- keep `OCR_ENGINE=mock` as the default for routine development
 - keep the 2c2g server free of OCR/model workloads
 
 ## Next Tasks
 
 Recommended order:
 
-1. install and verify PaddleOCR locally on the Windows laptop
-2. wire the real PaddleOCR engine behind `OCR_ENGINE=paddle`
+1. run end-to-end OCR Worker verification with `OCR_ENGINE=paddle`
+2. add UI/API endpoints for browsing questions and OCR text
 3. Vue 3 + Vite frontend
 
 ## Task Boundaries
@@ -56,5 +58,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please prepare the next PaddleOCR integration step for the Windows laptop only. First verify the correct PaddleOCR/PaddlePaddle installation commands for this machine, keep OCR_ENGINE=mock as the default, and do not put PaddleOCR or model files on the server or into Git.
+Please run an end-to-end local verification with OCR_ENGINE=paddle: start the API, upload a test image, run the Worker once in paddle mode, confirm the OCR job becomes succeeded with real raw_text, and do not commit model files, uploaded images, databases, or virtual environments.
 ```

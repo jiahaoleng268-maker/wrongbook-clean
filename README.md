@@ -110,7 +110,7 @@ OCR_ENGINE=mock
 Supported worker engine modes:
 
 - `OCR_ENGINE=mock` is the default and returns predictable fake OCR text.
-- `OCR_ENGINE=paddle` is a placeholder mode for future PaddleOCR wiring. Until PaddleOCR is installed and connected on the Windows laptop, jobs are marked `failed` with a clear dependency/setup message.
+- `OCR_ENGINE=paddle` runs the local Windows PaddleOCR engine when PaddleOCR, PaddlePaddle, and local models are available. It is for the laptop Worker only, not the server.
 
 Run continuously:
 

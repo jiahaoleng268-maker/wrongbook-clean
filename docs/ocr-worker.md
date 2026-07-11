@@ -168,7 +168,7 @@ OCR_ENGINE=mock
 
 `OCR_ENGINE=mock` is the default and keeps the fast local verification flow.
 
-`OCR_ENGINE=paddle` exists as a placeholder mode. Until PaddleOCR and PaddlePaddle are installed and model wiring is implemented on the Windows laptop, the Worker will claim the job, mark it `failed`, and store a clear setup error in `error_message`.
+`OCR_ENGINE=paddle` runs the real local PaddleOCR engine on the Windows laptop. If PaddleOCR/PaddlePaddle or the configured local model directories are missing, the Worker will claim the job, mark it `failed`, and store a clear setup error in `error_message`.
 
 Run the API first:
 
@@ -219,6 +219,6 @@ The mock Worker loop is:
 
 ## Current Rule
 
-Do not install PaddleOCR yet.
+Do not install PaddleOCR on the server. Local Windows laptop setup details are recorded in `docs/paddleocr-local.md`.
 
-The server-side OCR job API, mock Worker loop, automated tests, and selectable OCR engine layer now exist. PaddleOCR installation and model wiring should happen only after this flow stays green.
+The server-side OCR job API, mock Worker loop, automated tests, selectable OCR engine layer, and local PaddleOCR engine now exist. Keep the server free of OCR/model workloads.
