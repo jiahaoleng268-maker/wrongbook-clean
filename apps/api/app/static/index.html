@@ -118,9 +118,9 @@
               <option value="recognized">已识别</option>
               <option value="corrected">已校正</option>
               <option value="archived">已归档</option>
-            </select>
+            </select><select id="sortBySelect" aria-label="排序字段"><option value="created_at">创建时间</option><option value="updated_at">修改时间</option><option value="title">标题</option><option value="subject">科目</option><option value="question_type">题型</option><option value="difficulty">难度</option><option value="status">状态</option><option value="source_page">页码</option></select><button id="sortOrderButton" class="ghost-button" type="button" data-order="desc">降序 ↓</button>
           </div>
-          <div class="bulk-actions"><label><input id="selectPageQuestions" type="checkbox" /> 选择本页</label><select id="bulkSourceSelect"><option value="">批量资料</option></select><select id="bulkChapterSelect"><option value="">批量章节</option></select><select id="bulkStatusSelect"><option value="">批量状态</option><option value="draft">待整理</option><option value="recognized">整理中</option><option value="corrected">已完成</option><option value="archived">已归档</option></select><button id="applyBulkButton" class="ghost-button" type="button">应用到所选题目</button><span id="bulkState" class="state-text"></span></div><div class="filtered-export-actions">
+          <div class="bulk-actions"><label><input id="selectPageQuestions" type="checkbox" /> 选择本页</label><select id="bulkSourceSelect"><option value="">批量资料</option></select><select id="bulkChapterSelect"><option value="">批量章节</option></select><select id="bulkStatusSelect"><option value="">批量状态</option><option value="draft">待整理</option><option value="recognized">整理中</option><option value="corrected">已完成</option><option value="archived">已归档</option></select><select id="bulkKnowledgeSelect" multiple aria-label="批量知识点"></select><input id="bulkMistakeTagsInput" type="text" placeholder="追加错因标签，逗号分隔" /><button id="applyBulkButton" class="ghost-button" type="button">应用到所选题目</button><span id="bulkState" class="state-text"></span></div><div class="filtered-export-actions">
             <button id="exportFilteredJsonButton" class="ghost-button" type="button">导出筛选 JSON</button>
             <button id="exportFilteredMarkdownButton" class="ghost-button" type="button">导出筛选 Markdown</button>
           </div>

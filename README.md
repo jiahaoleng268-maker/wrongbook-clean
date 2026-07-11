@@ -269,3 +269,6 @@ The sidebar includes dynamic folders for unclassified questions, questions witho
 ## Offline math and attachments
 
 KaTeX JavaScript, CSS, and fonts are stored under `apps/api/app/static/vendor/katex`, so math preview no longer depends on a CDN. The **原始资料** tab supports multiple image attachments classified as question, answer, solution, draft, source page, or general attachment. Images can be previewed full-screen, reclassified, and deleted when they are not referenced by historical OCR jobs.
+## R2 table sorting and bulk metadata
+
+The question pane provides field-based sorting by title, subject, type, difficulty, status, page, and creation or update time. Table view shows separate source, chapter, type, difficulty, and status values. Bulk organization can append knowledge points and mistake tags without replacing existing metadata.

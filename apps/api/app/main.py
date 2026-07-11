@@ -83,6 +83,8 @@ class QuestionUpdatePayload(BaseModel):
     key_steps: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    knowledge_point_ids: list[int] = []
+    mistake_tag_names: list[str] = []
 
 
 class SourceCreatePayload(BaseModel):
@@ -124,7 +126,8 @@ class QuestionBulkUpdatePayload(BaseModel):
     source_id: Optional[int] = None
     chapter_id: Optional[int] = None
     status: Optional[str] = None
-
+    knowledge_point_ids: list[int] = []
+    mistake_tag_names: list[str] = []
 
 class AssetUpdatePayload(BaseModel):
     asset_type: str
@@ -1152,45 +1155,36 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
 def list_questions(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     subject: Optional[str] = Query(default=None),
+    source_id: Optional[int] = Query(default=None),
+    chapter_id: Optional[int] = Query(default=None),
+    smart_filter: Optional[str] = Query(default=None),
+    sort_by: str = Query(default="created_at"),
+    sort_order: str = Query(default="desc"),
     q: Optional[str] = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     query = db.query(Question)
-
-    if status_filter:
-        query = query.filter(Question.status == status_filter)
-
-    if subject:
-        query = query.filter(Question.subject == subject)
-
+    if status_filter: query = query.filter(Question.status == status_filter)
+    if subject: query = query.filter(Question.subject == subject)
+    if source_id is not None: query = query.filter(Question.source_id == source_id)
+    if chapter_id is not None: query = query.filter(Question.chapter_id == chapter_id)
+    if smart_filter == "unclassified": query = query.filter(Question.source_id.is_(None), Question.chapter_id.is_(None))
+    elif smart_filter == "missing_answer": query = query.filter(or_(Question.answer_text.is_(None), func.trim(Question.answer_text) == ""))
+    elif smart_filter == "missing_knowledge": query = query.filter(~Question.knowledge_points.any())
+    elif smart_filter == "recent": query = query.filter(Question.created_at >= utc_now() - timedelta(days=7))
     if q and q.strip():
         pattern = f"%{q.strip()}%"
-        query = query.filter(
-            or_(
-                Question.title.ilike(pattern),
-                Question.raw_text.ilike(pattern),
-                Question.corrected_text.ilike(pattern),
-                Question.subject.ilike(pattern),
-            )
-        )
-
+        query = query.filter(or_(Question.title.ilike(pattern), Question.raw_text.ilike(pattern), Question.corrected_text.ilike(pattern), Question.subject.ilike(pattern)))
+    sort_columns = {"created_at": Question.created_at, "updated_at": Question.updated_at, "title": Question.title, "subject": Question.subject, "question_type": Question.question_type, "difficulty": Question.difficulty, "status": Question.status, "source_page": Question.source_page}
+    sort_column = sort_columns.get(sort_by)
+    if sort_column is None: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by.")
+    if sort_order not in {"asc", "desc"}: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_order.")
     total = query.count()
-    questions = (
-        query.order_by(Question.created_at.desc(), Question.id.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-
-    return {
-        "items": [_question_summary_response(question) for question in questions],
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
-
+    ordering = sort_column.asc() if sort_order == "asc" else sort_column.desc()
+    questions = query.order_by(ordering, Question.id.desc()).offset(offset).limit(limit).all()
+    return {"items": [_question_summary_response(question) for question in questions], "total": total, "limit": limit, "offset": offset}
 
 @app.get("/api/knowledge-points")
 def list_knowledge_points(
@@ -1717,22 +1711,27 @@ def bulk_update_questions(payload: QuestionBulkUpdatePayload, db: Session = Depe
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_id.")
     if payload.chapter_id is not None:
         chapter = db.get(Chapter, payload.chapter_id)
-        if chapter is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chapter_id.")
-        if payload.source_id is not None and chapter.source_id != payload.source_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter does not belong to the selected source.")
+        if chapter is None: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chapter_id.")
+        if payload.source_id is not None and chapter.source_id != payload.source_id: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter does not belong to the selected source.")
+    unique_point_ids = list(dict.fromkeys(payload.knowledge_point_ids))
+    knowledge_points = db.query(KnowledgePoint).filter(KnowledgePoint.id.in_(unique_point_ids)).all() if unique_point_ids else []
+    if len(knowledge_points) != len(unique_point_ids): raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more knowledge points were not found.")
+    mistake_tags = []
+    for name in _normalize_mistake_tag_names(payload.mistake_tag_names):
+        tag = db.query(MistakeTag).filter(func.lower(MistakeTag.name) == name.casefold()).first()
+        if tag is None: tag = MistakeTag(name=name); db.add(tag); db.flush()
+        mistake_tags.append(tag)
     questions = db.query(Question).filter(Question.id.in_(question_ids)).all()
-    if len(questions) != len(question_ids):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more questions were not found.")
+    if len(questions) != len(question_ids): raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more questions were not found.")
     for question in questions:
-        if payload.source_id is not None:
-            question.source_id = payload.source_id
+        if payload.source_id is not None: question.source_id = payload.source_id
         if payload.chapter_id is not None:
-            chapter = db.get(Chapter, payload.chapter_id)
-            question.chapter_id = chapter.id
-            question.source_id = chapter.source_id
-        if payload.status is not None:
-            question.status = payload.status
+            chapter = db.get(Chapter, payload.chapter_id); question.chapter_id = chapter.id; question.source_id = chapter.source_id
+        if payload.status is not None: question.status = payload.status
+        existing_point_ids = {point.id for point in question.knowledge_points}
+        question.knowledge_points.extend(point for point in knowledge_points if point.id not in existing_point_ids)
+        existing_tag_ids = {tag.id for tag in question.mistake_tags}
+        question.mistake_tags.extend(tag for tag in mistake_tags if tag.id not in existing_tag_ids)
         question.updated_at = utc_now()
     db.commit()
     return {"updated_count": len(questions), "question_ids": question_ids}
@@ -1743,6 +1742,9 @@ async def create_manual_question(
     subject: Optional[str] = Form(None),
     source: Optional[str] = Form(None),
     question_type: Optional[str] = Form(None),
+    source_id: Optional[int] = Form(None),
+    chapter_id: Optional[int] = Form(None),
+    source_page: Optional[str] = Form(None),
     content: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -1756,6 +1758,9 @@ async def create_manual_question(
         subject=subject.strip() if subject else None,
         source=source.strip() if source else "PaddleOCR Web",
         question_type=question_type.strip() if question_type else None,
+        source_id=source_id,
+        chapter_id=chapter_id,
+        source_page=source_page.strip() if source_page else None,
         raw_text=normalized_content,
         corrected_text=normalized_content,
         status="draft",

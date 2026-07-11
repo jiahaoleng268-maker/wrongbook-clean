@@ -1004,7 +1004,7 @@ body { padding-left: 220px; background: #f4f6fa; }
 .source-form { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 22px; }
 .source-form h2 { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 760px) { .structured-editor-grid, .classification-grid, .source-form { grid-template-columns: 1fr; } }
-.bulk-actions { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 10px; margin-bottom: 10px; border-radius: 10px; background: #eef3fb; }
+.bulk-actions { display: grid; grid-template-columns: auto 1fr 1fr 1fr 1.3fr 1.5fr auto; gap: 8px; align-items: center; padding: 10px; margin-bottom: 10px; border-radius: 10px; background: #eef3fb; }
 .question-item { position: relative; }
 .question-select { flex: 0 0 auto; width: 18px; height: 18px; margin: 8px 2px 0 0; }
 .structured-editor-grid .latex-preview-content { min-height: 70px; padding: 10px; border: 1px dashed #c4cfdd; border-radius: 10px; background: #fbfcff; white-space: pre-wrap; }
@@ -1014,7 +1014,7 @@ body { padding-left: 220px; background: #f4f6fa; }
 .question-list.is-table-view { display: table; width: 100%; border-collapse: collapse; }
 .question-list.is-table-view .question-item { display: grid; grid-template-columns: 24px 1fr 3fr; width: 100%; min-height: auto; margin: 0; border-radius: 0; border-width: 0 0 1px; box-shadow: none; }
 .question-list.is-table-view .question-thumb { display: none; }
-.question-list.is-table-view .question-item > div { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(180px, 1fr) minmax(120px, auto); align-items: center; gap: 12px; }
+.question-list.is-table-view .question-item > div { display: grid; grid-template-columns: minmax(170px, 2fr) minmax(130px, 1fr) minmax(120px, 1fr) minmax(100px, .8fr) minmax(80px, .6fr) minmax(90px, auto); align-items: center; gap: 12px; }
 .question-list.is-table-view .question-preview, .question-list.is-table-view .tag-row { display: none; }
 .source-tree-row { display: grid; grid-template-columns: 1fr auto; align-items: center; }
 .source-tree-row > button:first-child { width: 100%; }
@@ -1030,3 +1030,5 @@ body { padding-left: 220px; background: #f4f6fa; }
 .asset-preview-dialog img { display: block; max-width: 90vw; max-height: 82vh; object-fit: contain; }
 .asset-preview-dialog .ghost-button { width: 100%; margin-top: 10px; }
 @media (max-width: 720px) { .asset-upload-controls { align-items: stretch; flex-direction: column; } }
+.table-cell { color: #536274; font-size: .85rem; }
+#bulkKnowledgeSelect { min-height: 42px; max-height: 90px; }

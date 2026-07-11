@@ -227,6 +227,21 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.request_json("DELETE", f"/api/chapters/{chapter['chapter_id']}")
         self.request_json("DELETE", f"/api/sources/{source['source_id']}")
 
+    def test_sorting_and_bulk_metadata_append(self) -> None:
+        first = self.upload_image("sort-a.png")
+        second = self.upload_image("sort-b.png")
+        self.request_json("PATCH", f"/api/questions/{first['question_id']}", payload={"title": "B title"})
+        self.request_json("PATCH", f"/api/questions/{second['question_id']}", payload={"title": "A title"})
+        point = self.request_json("POST", "/api/knowledge-points", payload={"name": "矩阵秩", "subject": "线性代数"})["knowledge_point"]
+        result = self.request_json("POST", "/api/questions/bulk-update", payload={"question_ids": [first["question_id"], second["question_id"]], "knowledge_point_ids": [point["knowledge_point_id"]], "mistake_tag_names": ["计算错误"]})
+        self.assertEqual(result["updated_count"], 2)
+        sorted_items = self.request_json("GET", "/api/questions?sort_by=title&sort_order=asc")["items"]
+        selected = [item for item in sorted_items if item["question_id"] in {first["question_id"], second["question_id"]}]
+        self.assertEqual([item["title"] for item in selected], ["A title", "B title"])
+        detail = self.request_json("GET", f"/api/questions/{first['question_id']}")["question"]
+        self.assertIn("矩阵秩", [item["name"] for item in detail["knowledge_points"]])
+        self.assertIn("计算错误", [item["name"] for item in detail["mistake_tags"]])
+
     def test_source_filters_manual_assignment_and_bulk_update(self) -> None:
         source = self.request_json("POST", "/api/sources", payload={"name": "线代讲义"})["source"]
         chapter = self.request_json("POST", "/api/chapters", payload={"source_id": source["source_id"], "name": "矩阵"})["chapter"]
@@ -366,7 +381,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v11', service_worker)
+        self.assertIn('wrongbook-web-v12', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

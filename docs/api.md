@@ -704,3 +704,6 @@ Assigning a chapter automatically assigns its source. A chapter from a different
 - `DELETE /api/assets/{asset_id}` removes an unreferenced attachment and its local file.
 
 Assets referenced by OCR history return `409` on deletion to preserve historical data integrity.
+## Question sorting and bulk metadata
+
+`GET /api/questions` accepts `sort_by` and `sort_order`. Sort fields are restricted to `created_at`, `updated_at`, `title`, `subject`, `question_type`, `difficulty`, `status`, and `source_page`. Bulk update accepts `knowledge_point_ids` and `mistake_tag_names`; these values are appended to existing question metadata rather than replacing it.

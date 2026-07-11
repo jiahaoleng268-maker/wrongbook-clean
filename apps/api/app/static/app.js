@@ -20,6 +20,8 @@
     selectedQuestionIds: new Set(),
     smartFilter: "",
     questionView: "card",
+    sortBy: "created_at",
+    sortOrder: "desc",
   };
 
   const statusLabels = {
@@ -165,6 +167,10 @@
     bulkStatusSelect: $("bulkStatusSelect"),
     applyBulkButton: $("applyBulkButton"),
     bulkState: $("bulkState"),
+    bulkKnowledgeSelect: $("bulkKnowledgeSelect"),
+    bulkMistakeTagsInput: $("bulkMistakeTagsInput"),
+    sortBySelect: $("sortBySelect"),
+    sortOrderButton: $("sortOrderButton"),
     smartFolders: $("smartFolders"),
     cardViewButton: $("cardViewButton"),
     tableViewButton: $("tableViewButton"),
@@ -382,7 +388,15 @@
       pill.className = `status-pill ${question.status || ""}`;
       pill.textContent = statusLabels[question.status] || question.status || "未知";
 
-      body.append(title, meta, preview, pill);
+      if (state.questionView === "table") {
+        meta.textContent = question.source_record?.name || "未分类";
+        preview.textContent = question.chapter?.name || "无章节";
+        const typeCell = document.createElement("span"); typeCell.className = "table-cell"; typeCell.textContent = question.question_type || "未设置";
+        const difficultyCell = document.createElement("span"); difficultyCell.className = "table-cell"; difficultyCell.textContent = question.difficulty || "未设置";
+        body.append(title, meta, preview, typeCell, difficultyCell, pill);
+      } else {
+        body.append(title, meta, preview, pill);
+      }
       const tags = (question.mistake_tags || []).slice(0, 3);
       if (tags.length) {
         const tagRow = document.createElement("div");
@@ -533,6 +547,7 @@
   function renderKnowledgePoints(selectedIds = []) {
     const selected = new Set(selectedIds);
     elements.knowledgePointList.replaceChildren();
+    elements.bulkKnowledgeSelect.replaceChildren();
     if (!state.knowledgePoints.length) {
       const empty = document.createElement("small");
       empty.textContent = "暂无知识点，可在下方新建。";
@@ -550,6 +565,7 @@
       text.textContent = point.subject ? `${point.subject} · ${point.name}` : point.name;
       label.append(checkbox, text);
       elements.knowledgePointList.append(label);
+      const bulkOption = document.createElement("option"); bulkOption.value = String(point.knowledge_point_id); bulkOption.textContent = point.subject ? `${point.subject} · ${point.name}` : point.name; elements.bulkKnowledgeSelect.append(bulkOption);
     }
   }
 
@@ -1255,6 +1271,8 @@
       } catch (error) { setStateText(elements.assetState, error.message, "error"); } finally { elements.uploadAssetsButton.disabled = false; }
     });
     elements.closeAssetPreviewButton.addEventListener("click", () => elements.assetPreviewDialog.close());
+    elements.sortBySelect.addEventListener("change", () => { state.sortBy = elements.sortBySelect.value; state.questionOffset = 0; loadQuestions(); });
+    elements.sortOrderButton.addEventListener("click", () => { state.sortOrder = state.sortOrder === "asc" ? "desc" : "asc"; elements.sortOrderButton.dataset.order = state.sortOrder; elements.sortOrderButton.textContent = state.sortOrder === "asc" ? "升序 ↑" : "降序 ↓"; state.questionOffset = 0; loadQuestions(); });
     elements.smartFolders.addEventListener("click", (event) => {
       const target = event.target.closest("button"); if (!target) return;
       state.smartFilter = target.dataset.smartFilter || "";
@@ -1280,7 +1298,7 @@
       const questionIds = Array.from(state.selectedQuestionIds);
       if (!questionIds.length) { setStateText(elements.bulkState, "请先选择题目", "error"); return; }
       try {
-        const result = await requestJSON("/api/questions/bulk-update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question_ids: questionIds, source_id: elements.bulkSourceSelect.value ? Number(elements.bulkSourceSelect.value) : null, chapter_id: elements.bulkChapterSelect.value ? Number(elements.bulkChapterSelect.value) : null, status: elements.bulkStatusSelect.value || null }) });
+        const result = await requestJSON("/api/questions/bulk-update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question_ids: questionIds, source_id: elements.bulkSourceSelect.value ? Number(elements.bulkSourceSelect.value) : null, chapter_id: elements.bulkChapterSelect.value ? Number(elements.bulkChapterSelect.value) : null, status: elements.bulkStatusSelect.value || null, knowledge_point_ids: Array.from(elements.bulkKnowledgeSelect.selectedOptions).map((option) => Number(option.value)), mistake_tag_names: parseMistakeTags(elements.bulkMistakeTagsInput.value) }) });
         state.selectedQuestionIds.clear(); elements.selectPageQuestions.checked = false; await loadQuestions(); setStateText(elements.bulkState, `已更新 ${result.updated_count} 道题`, "success");
       } catch (error) { setStateText(elements.bulkState, error.message, "error"); }
     });
