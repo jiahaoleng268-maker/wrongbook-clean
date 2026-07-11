@@ -33,6 +33,8 @@ from apps.api.app.models import (
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
+MAX_IMPORT_QUESTIONS = 500
 CHUNK_SIZE = 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": {".jpg", ".jpeg"},
@@ -394,6 +396,100 @@ def _question_export_payload(question: Question) -> dict:
     }
 
 
+def _optional_import_text(value: Any, field: str, max_length: Optional[int] = None) -> Optional[str]:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field} must be a string or null.")
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if max_length is not None and len(normalized) > max_length:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field} cannot exceed {max_length} characters.")
+    return normalized
+
+
+def _import_question_items(payload: Any) -> list[dict]:
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported WrongBook JSON version.")
+    export_format = payload.get("format")
+    if export_format == "wrongbook-question":
+        items = [payload.get("question")]
+    elif export_format == "wrongbook-question-collection":
+        items = payload.get("questions")
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported WrongBook JSON format.")
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Import must contain at least one question.")
+    if len(items) > MAX_IMPORT_QUESTIONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Import cannot contain more than {MAX_IMPORT_QUESTIONS} questions.")
+    if not all(isinstance(item, dict) for item in items):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Every imported question must be an object.")
+    return items
+
+
+def _find_or_create_import_knowledge_point(db: Session, name: str, subject: Optional[str]) -> KnowledgePoint:
+    query = db.query(KnowledgePoint).filter(func.lower(KnowledgePoint.name) == name.casefold())
+    query = query.filter(KnowledgePoint.subject.is_(None)) if subject is None else query.filter(func.lower(KnowledgePoint.subject) == subject.casefold())
+    point = query.first()
+    if point is None:
+        point = KnowledgePoint(name=name, subject=subject)
+        db.add(point)
+        db.flush()
+    return point
+
+
+def _find_or_create_import_mistake_tag(db: Session, name: str) -> MistakeTag:
+    tag = db.query(MistakeTag).filter(func.lower(MistakeTag.name) == name.casefold()).first()
+    if tag is None:
+        tag = MistakeTag(name=name)
+        db.add(tag)
+        db.flush()
+    return tag
+
+
+def _create_imported_question(db: Session, item: dict) -> Question:
+    question_status = item.get("status", "draft")
+    if question_status not in ALLOWED_QUESTION_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid imported question status: {question_status}.")
+    question = Question(
+        subject=_optional_import_text(item.get("subject"), "subject", 100),
+        title=_optional_import_text(item.get("title"), "title", 255),
+        raw_text=_optional_import_text(item.get("raw_text"), "raw_text"),
+        corrected_text=_optional_import_text(item.get("corrected_text"), "corrected_text"),
+        question_type=_optional_import_text(item.get("question_type"), "question_type", 100),
+        difficulty=_optional_import_text(item.get("difficulty"), "difficulty", 50),
+        source=_optional_import_text(item.get("source"), "source", 255),
+        status=question_status,
+    )
+    db.add(question)
+    raw_points = item.get("knowledge_points", [])
+    if not isinstance(raw_points, list) or len(raw_points) > MAX_KNOWLEDGE_POINTS_PER_QUESTION:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid imported knowledge points.")
+    seen_points = set()
+    for raw_point in raw_points:
+        if not isinstance(raw_point, dict):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Imported knowledge points must be objects.")
+        name = _optional_import_text(raw_point.get("name"), "knowledge point name", 255)
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Knowledge point name cannot be empty.")
+        point_subject = _optional_import_text(raw_point.get("subject"), "knowledge point subject", 100)
+        key = ((point_subject or "").casefold(), name.casefold())
+        if key not in seen_points:
+            seen_points.add(key)
+            question.knowledge_points.append(_find_or_create_import_knowledge_point(db, name, point_subject))
+    raw_tags = item.get("mistake_tags", [])
+    if not isinstance(raw_tags, list):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid imported mistake tags.")
+    tag_values = [raw_tag.get("name") if isinstance(raw_tag, dict) else raw_tag for raw_tag in raw_tags]
+    if not all(isinstance(value, str) for value in tag_values):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Imported mistake tag names must be strings.")
+    tag_names = _normalize_mistake_tag_names(tag_values)
+    question.mistake_tags = [_find_or_create_import_mistake_tag(db, name) for name in tag_names]
+    db.flush()
+    return question
+
+
 def _question_markdown(question: Question) -> str:
     title = question.title or f"错题 #{question.id}"
     metadata = [
@@ -703,6 +799,91 @@ def question_stats(
             }
             for point_id, name, subject, question_count in knowledge_rows
         ],
+    }
+
+
+@app.get("/api/questions/export")
+def export_questions(
+    format: str = Query(default="json", pattern="^(json|markdown)$"),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    subject: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Question)
+    if status_filter:
+        query = query.filter(Question.status == status_filter)
+    if subject:
+        query = query.filter(Question.subject == subject)
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                Question.title.ilike(pattern),
+                Question.raw_text.ilike(pattern),
+                Question.corrected_text.ilike(pattern),
+                Question.subject.ilike(pattern),
+            )
+        )
+    total = query.count()
+    questions = query.order_by(Question.created_at.desc(), Question.id.desc()).limit(limit).all()
+    filters = {"status": status_filter, "subject": subject, "q": q.strip() if q and q.strip() else None}
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if format == "markdown":
+        sections = ["# WrongBook 题目导出", "", f"- 总匹配数：{total}", f"- 本次导出数：{len(questions)}", ""]
+        for question in questions:
+            sections.append(_question_markdown(question).rstrip())
+            sections.extend(["", "---", ""])
+        return PlainTextResponse(
+            "\n".join(sections).rstrip() + "\n",
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="wrongbook-export-{timestamp}.md"'},
+        )
+    payload = {
+        "format": "wrongbook-question-collection",
+        "version": 1,
+        "exported_at": utc_now(),
+        "filters": filters,
+        "total_matching": total,
+        "exported_count": len(questions),
+        "questions": [_question_detail_response(question) for question in questions],
+    }
+    return JSONResponse(
+        jsonable_encoder(payload),
+        headers={"Content-Disposition": f'attachment; filename="wrongbook-export-{timestamp}.json"'},
+    )
+
+
+@app.post("/api/questions/import", status_code=status.HTTP_201_CREATED)
+async def import_questions(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    filename = file.filename or ""
+    if Path(filename).suffix.lower() != ".json":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Import file must use the .json extension.")
+    content = await file.read(MAX_IMPORT_BYTES + 1)
+    await file.close()
+    if len(content) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"Import file cannot exceed {MAX_IMPORT_BYTES} bytes.")
+    try:
+        payload = json.loads(content.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Import file must contain valid UTF-8 JSON.") from exc
+    items = _import_question_items(payload)
+    try:
+        questions = [_create_imported_question(db, item) for item in items]
+        db.commit()
+        for question in questions:
+            db.refresh(question)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    return {
+        "imported_count": len(questions),
+        "question_ids": [question.id for question in questions],
+        "ignored_fields": ["id", "assets", "ocr_jobs", "reviews", "created_at", "updated_at"],
     }
 
 

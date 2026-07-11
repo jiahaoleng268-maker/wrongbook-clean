@@ -167,6 +167,7 @@ python -m unittest discover -s tests
 - `PATCH /api/questions/{id}` updates corrected text and metadata
 - `POST /api/questions/{id}/archive` safely archives a question
 - `POST /api/questions/{id}/restore` restores an archived question
+- `GET /api/questions/export` downloads a filtered JSON or Markdown question collection
 - `GET /api/questions/{id}/export` downloads JSON or Markdown question data
 - `GET /api/knowledge-points` lists reusable hierarchical knowledge points
 - `POST /api/knowledge-points` creates one knowledge point
@@ -218,3 +219,5 @@ Keep these out of Git:
 - backup folders and files
 
 The server is intended to stay lightweight. OCR and large-model workloads must run outside the server, on the Windows laptop worker.
+
+- ???? WrongBook v1 JSON??????????????? ID????OCR ????????

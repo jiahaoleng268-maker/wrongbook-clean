@@ -39,21 +39,21 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - question and review-history pagination plus detailed deployment health checks added
 - versioned JSON and readable Markdown question exports added
 - skip navigation, live status regions, visible focus, and keyboard shortcuts added
+- filtered JSON and Markdown question collection exports added
 
 ## Current Task
 
-- show review and mistake tag data in the Web app
-- keep the first review workflow simple and mobile-friendly
-- keep the 2c2g server free of OCR/model workloads
+- keep the MVP stable after the first complete workflow release
+- preserve the lightweight FastAPI, SQLite, local-file, and polling Worker architecture
+- prioritize real usage feedback over adding infrastructure
 
 ## Next Tasks
 
 Recommended order:
 
-1. show review and tag data in the Web app
-2. improve OCR text cleanup for math/chinese output
-3. add knowledge point management APIs
-
+1. collect real phone/PWA usage feedback
+2. improve formula OCR only if manual correction becomes a bottleneck
+3. add optional import support for the versioned JSON export format
 ## Task Boundaries
 
 Keep each task small.

@@ -176,6 +176,8 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn('id="reviewHistoryTitle"', html)
         self.assertIn('class="skip-link"', html)
         self.assertIn('id="mainContent"', html)
+        self.assertIn('id="exportFilteredJsonButton"', html)
+        self.assertIn('id="exportFilteredMarkdownButton"', html)
         self.assertIn('id="exportJsonButton"', html)
         self.assertIn('id="exportMarkdownButton"', html)
         self.assertIn('id="archiveQuestionButton"', html)
@@ -196,6 +198,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("javascript", js_content_type)
         self.assertIn("/api/questions/upload", javascript)
         self.assertIn("/api/questions/stats", javascript)
+        self.assertIn("/api/questions/export?", javascript)
         self.assertIn("/export?format=", javascript)
         self.assertIn("setupKeyboardShortcuts", javascript)
         self.assertIn("requestSubmit", javascript)
@@ -357,6 +360,94 @@ class WrongBookIntegrationTest(unittest.TestCase):
                 payload={"status": "bad-status"},
             )
         self.assertEqual(error.exception.code, 400)
+
+    def test_filtered_question_collection_exports(self) -> None:
+        first = self.upload_image("collection-one.png")
+        second = self.upload_image("collection-two.png")
+        self.request_json("PATCH", f"/api/questions/{first['question_id']}", payload={"title": "Algebra One", "subject": "Math", "status": "corrected"})
+        self.request_json("PATCH", f"/api/questions/{second['question_id']}", payload={"title": "Geometry Two", "subject": "Math", "status": "draft"})
+
+        request = urllib.request.Request(f"{self.base_url}/api/questions/export?format=json&status=corrected&q=Algebra")
+        with urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        self.assertEqual(payload["format"], "wrongbook-question-collection")
+        self.assertEqual(payload["total_matching"], 1)
+        self.assertEqual(payload["exported_count"], 1)
+        self.assertEqual(payload["questions"][0]["title"], "Algebra One")
+
+        markdown, content_type = self.request_text("GET", "/api/questions/export?format=markdown&status=draft")
+        self.assertIn("text/markdown", content_type)
+        self.assertIn("Geometry Two", markdown)
+        self.assertNotIn("Algebra One", markdown)
+
+    def test_question_json_import_creates_new_questions_and_reuses_metadata(self) -> None:
+        payload = {
+            "format": "wrongbook-question-collection",
+            "version": 1,
+            "questions": [
+                {
+                    "id": 999,
+                    "title": "Imported Algebra",
+                    "subject": "Math",
+                    "raw_text": "x + 1 = 2",
+                    "corrected_text": "x = 1",
+                    "question_type": "calculation",
+                    "difficulty": "easy",
+                    "source": "legacy export",
+                    "status": "corrected",
+                    "knowledge_points": [{"id": 10, "name": "Linear equations", "subject": "Math"}],
+                    "mistake_tags": [{"id": 20, "name": "Sign error"}],
+                    "assets": [{"file_path": "must-not-import.png"}],
+                    "ocr_jobs": [{"status": "succeeded"}],
+                    "reviews": [{"result": "good"}],
+                },
+                {
+                    "title": "Imported Geometry",
+                    "subject": "Math",
+                    "status": "draft",
+                    "knowledge_points": [{"name": "Linear equations", "subject": "Math"}],
+                    "mistake_tags": ["Sign error"],
+                },
+            ],
+        }
+        body, content_type = _multipart_body("file", "wrongbook.json", "application/json", json.dumps(payload).encode("utf-8"))
+        request = urllib.request.Request(
+            f"{self.base_url}/api/questions/import",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            imported = json.loads(response.read().decode("utf-8"))
+        self.assertEqual(imported["imported_count"], 2)
+        self.assertNotIn(999, imported["question_ids"])
+        first = self.request_json("GET", f"/api/questions/{imported['question_ids'][0]}")["question"]
+        second = self.request_json("GET", f"/api/questions/{imported['question_ids'][1]}")["question"]
+        self.assertEqual(first["title"], "Imported Algebra")
+        self.assertEqual(first["assets"], [])
+        self.assertEqual(first["ocr_jobs"], [])
+        self.assertEqual(first["reviews"], [])
+        self.assertEqual(first["knowledge_points"][0]["knowledge_point_id"], second["knowledge_points"][0]["knowledge_point_id"])
+        self.assertEqual(first["mistake_tags"][0]["mistake_tag_id"], second["mistake_tags"][0]["mistake_tag_id"])
+
+    def test_question_json_import_rejects_invalid_format_without_partial_write(self) -> None:
+        payload = {
+            "format": "wrongbook-question-collection",
+            "version": 1,
+            "questions": [{"title": "Valid first"}, {"title": "Invalid second", "status": "unsafe"}],
+        }
+        body, content_type = _multipart_body("file", "wrongbook.json", "application/json", json.dumps(payload).encode("utf-8"))
+        request = urllib.request.Request(
+            f"{self.base_url}/api/questions/import",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=10)
+        self.assertEqual(error.exception.code, 400)
+        questions = self.request_json("GET", "/api/questions?q=Valid%20first")
+        self.assertEqual(questions["total"], 0)
 
     def test_question_export_formats(self) -> None:
         upload = self.upload_image("export.png")

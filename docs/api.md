@@ -662,3 +662,15 @@ Downloads one question using `format=json` or `format=markdown`.
 JSON export includes a versioned envelope and the full question detail response, including metadata, corrected text, OCR text, tags, knowledge points, assets, OCR jobs, and review records. Image bytes are not embedded.
 
 Markdown export contains readable metadata, corrected text, OCR text, knowledge points, mistake tags, and review history. Response filenames are sanitized from the question title.
+
+## Filtered Question Collection Export
+
+### `GET /api/questions/export`
+
+Downloads a filtered question collection using `format=json` or `format=markdown`. It accepts the same `status`, `subject`, and `q` filters as the question list. `limit` defaults to 500 and cannot exceed 500 to protect the low-resource server.
+
+The JSON envelope reports applied filters, total matching questions, exported count, and full question detail records. Markdown contains a collection heading followed by one readable section per question. Images are not embedded.
+
+### `POST /api/questions/import`
+
+?? `.json` ????? `wrongbook-question` v1 ? `wrongbook-question-collection` v1????? 500 ??????? 5 MiB???????????????????????????????? ID????OCR ??????????????????????????

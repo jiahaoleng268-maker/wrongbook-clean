@@ -113,6 +113,18 @@
               <option value="archived">已归档</option>
             </select>
           </div>
+          <div class="filtered-export-actions">
+            <button id="exportFilteredJsonButton" class="ghost-button" type="button">导出筛选 JSON</button>
+            <button id="exportFilteredMarkdownButton" class="ghost-button" type="button">导出筛选 Markdown</button>
+          </div>
+          <div class="question-import-actions">
+            <label class="import-file-picker" for="questionImportInput">
+              <input id="questionImportInput" type="file" accept="application/json,.json" />
+              <span id="questionImportFileLabel">?? WrongBook JSON</span>
+            </label>
+            <button id="importQuestionsButton" class="ghost-button" type="button">??????</button>
+          </div>
+          <div id="questionImportState" class="inline-status" role="status" aria-live="polite"></div>
 
           <div id="listStatus" class="inline-status" role="status" aria-live="polite"></div>
           <div id="questionList" class="question-list" role="list"></div>

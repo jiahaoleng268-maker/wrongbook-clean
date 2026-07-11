@@ -38,6 +38,12 @@
     refreshButton: $("refreshButton"),
     searchInput: $("searchInput"),
     statusFilter: $("statusFilter"),
+    exportFilteredJsonButton: $("exportFilteredJsonButton"),
+    exportFilteredMarkdownButton: $("exportFilteredMarkdownButton"),
+    questionImportInput: $("questionImportInput"),
+    questionImportFileLabel: $("questionImportFileLabel"),
+    importQuestionsButton: $("importQuestionsButton"),
+    questionImportState: $("questionImportState"),
     listCount: $("listCount"),
     listStatus: $("listStatus"),
     questionList: $("questionList"),
@@ -701,6 +707,42 @@
     }
   }
 
+  async function handleQuestionImport() {
+    const file = elements.questionImportInput.files[0];
+    if (!file) {
+      setStateText(elements.questionImportState, "???? WrongBook JSON ???", true);
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    elements.importQuestionsButton.disabled = true;
+    setStateText(elements.questionImportState, "?????");
+    try {
+      const response = await fetch("/api/questions/import", { method: "POST", body: formData });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "????");
+      elements.questionImportInput.value = "";
+      elements.questionImportFileLabel.textContent = "?? WrongBook JSON";
+      setStateText(elements.questionImportState, `??? ${payload.imported_count} ?????`);
+      state.questionOffset = 0;
+      await Promise.all([loadQuestions({ selectFirst: true }), loadQuestionStats(), loadKnowledgePoints(), loadMistakeTagSuggestions()]);
+    } catch (error) {
+      setStateText(elements.questionImportState, error.message, true);
+    } finally {
+      elements.importQuestionsButton.disabled = false;
+    }
+  }
+
+
+  function downloadFilteredQuestions(format) {
+    const params = new URLSearchParams({ format });
+    const query = elements.searchInput.value.trim();
+    const status = elements.statusFilter.value;
+    if (query) params.set("q", query);
+    if (status) params.set("status", status);
+    window.location.assign(`/api/questions/export?${params.toString()}`);
+  }
+
   function downloadQuestionExport(format) {
     const question = state.currentQuestion;
     if (!question) return;
@@ -781,6 +823,14 @@
     elements.detailForm.addEventListener("submit", handleSave);
     elements.refreshButton.addEventListener("click", () => { loadQuestions(); loadQuestionStats(); loadDueReviews(); loadReviewStats(); });
     elements.scheduleReviewButton.addEventListener("click", handleScheduleReview);
+    elements.exportFilteredJsonButton.addEventListener("click", () => downloadFilteredQuestions("json"));
+    elements.exportFilteredMarkdownButton.addEventListener("click", () => downloadFilteredQuestions("markdown"));
+    elements.importQuestionsButton.addEventListener("click", handleQuestionImport);
+    elements.questionImportInput.addEventListener("change", () => {
+      const file = elements.questionImportInput.files[0];
+      elements.questionImportFileLabel.textContent = file ? file.name : "?? WrongBook JSON";
+      setStateText(elements.questionImportState, file ? "JSON ??????" : "");
+    });
     elements.exportJsonButton.addEventListener("click", () => downloadQuestionExport("json"));
     elements.exportMarkdownButton.addEventListener("click", () => downloadQuestionExport("markdown"));
     elements.archiveQuestionButton.addEventListener("click", () => handleArchiveAction("archive"));
