@@ -1,4 +1,4 @@
-﻿# Codex Task Plan
+# Codex Task Plan
 
 This file tracks completed work and the recommended next tasks for AI-assisted development.
 
@@ -23,20 +23,21 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - `OCR_ENGINE=paddle` placeholder mode added with clear failed-job setup errors
 - PaddlePaddle GPU and PaddleOCR installed and verified on the Windows laptop
 - real local PaddleOCR engine wired behind `OCR_ENGINE=paddle`
+- question browse, detail, and edit APIs added
 
 ## Current Task
 
-- verify full upload-to-real-PaddleOCR Worker flow against the local backend
-- keep `OCR_ENGINE=mock` as the default for routine development
+- prepare a small frontend/PWA-facing question workflow
+- keep API-first development before building the full interface
 - keep the 2c2g server free of OCR/model workloads
 
 ## Next Tasks
 
 Recommended order:
 
-1. run end-to-end OCR Worker verification with `OCR_ENGINE=paddle`
-2. add UI/API endpoints for browsing questions and OCR text
-3. Vue 3 + Vite frontend
+1. add minimal frontend/PWA scaffold for upload and question browsing
+2. add review scheduling and mistake tagging APIs
+3. improve OCR text cleanup for math/chinese output
 
 ## Task Boundaries
 
@@ -58,5 +59,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please run an end-to-end local verification with OCR_ENGINE=paddle: start the API, upload a test image, run the Worker once in paddle mode, confirm the OCR job becomes succeeded with real raw_text, and do not commit model files, uploaded images, databases, or virtual environments.
+Please add a minimal frontend/PWA scaffold for WrongBook that can upload an image, list questions, open question details, and edit corrected_text. Keep it lightweight, do not add heavy infrastructure, and keep OCR/model workloads outside the server.
 ```

@@ -1,10 +1,10 @@
-﻿# WrongBook
+# WrongBook
 
 WrongBook is a personal wrong-question collection and review tool. The goal is to let a phone browser or PWA upload photos of questions, let the server store and organize them, and let a Windows laptop run OCR work separately from the low-resource server.
 
 ## Current Status
 
-The project is currently a lightweight FastAPI backend in `apps/api` plus a minimal mock OCR Worker in `apps/ocr-worker`. It has basic health endpoints, the first SQLite/SQLAlchemy data model, database initialization logic, a local image upload API, polling-style OCR job endpoints, and a safe uploaded-asset file endpoint. It does not include server-side OCR processing, PaddleOCR, or a frontend.
+The project is currently a lightweight FastAPI backend in `apps/api` plus a local OCR Worker in `apps/ocr-worker`. It has health endpoints, the first SQLite/SQLAlchemy data model, local image upload, question browsing/editing APIs, polling-style OCR job endpoints, a safe uploaded-asset file endpoint, mock OCR mode, and local Windows PaddleOCR mode. It does not include server-side OCR processing or a frontend.
 
 ## Local API Startup
 
@@ -141,6 +141,9 @@ python -m unittest discover -s tests
 - `GET /` returns `{"message":"WrongBook API is running"}`
 - `GET /health` returns `{"status":"ok"}`
 - `POST /api/questions/upload` uploads one image and creates a pending OCR job
+- `GET /api/questions` lists questions with OCR text and lightweight metadata
+- `GET /api/questions/{id}` returns one question with assets and OCR jobs
+- `PATCH /api/questions/{id}` updates corrected text and metadata
 - `GET /api/assets/{asset_id}/file` returns an uploaded asset file only if it is under `UPLOAD_DIR`
 - `GET /api/ocr/jobs/next` claims a pending OCR job for a token-authenticated Worker
 - `GET /api/ocr/jobs/{id}` returns OCR job status and details

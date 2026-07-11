@@ -1,4 +1,4 @@
-﻿# API
+# API
 
 This document describes the current WrongBook API. The server is lightweight and does not run OCR or large models.
 
@@ -81,6 +81,90 @@ Current scope:
 - no frontend
 - no image binary data stored in SQLite
 
+## Browse Questions
+
+### GET /api/questions
+
+Returns a paginated list of questions for the future frontend/PWA.
+
+Query parameters:
+
+- `status`: optional exact status filter, such as `draft`, `recognized`, `corrected`, or `archived`
+- `subject`: optional exact subject filter
+- `q`: optional text search across `title`, `raw_text`, `corrected_text`, and `subject`
+- `limit`: optional page size, default `20`, maximum `100`
+- `offset`: optional offset, default `0`
+
+Example:
+
+```powershell
+curl.exe "http://127.0.0.1:8000/api/questions?status=recognized&limit=20&offset=0"
+```
+
+Response shape:
+
+```json
+{
+  "items": [
+    {
+      "question_id": 1,
+      "subject": "math",
+      "title": "Derivative practice",
+      "raw_text": "recognized OCR text",
+      "corrected_text": null,
+      "question_type": null,
+      "difficulty": null,
+      "source": "upload",
+      "status": "recognized",
+      "asset_count": 1,
+      "first_asset": {},
+      "latest_ocr_job": {},
+      "created_at": "2026-07-11T10:00:00",
+      "updated_at": "2026-07-11T10:01:00"
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+## Get Question Detail
+
+### GET /api/questions/{question_id}
+
+Returns one question with all uploaded assets and OCR jobs.
+
+Example:
+
+```powershell
+curl.exe "http://127.0.0.1:8000/api/questions/1"
+```
+
+Unknown IDs return HTTP 404.
+
+## Update Question
+
+### PATCH /api/questions/{question_id}
+
+Updates user-editable question fields. This is intended for manually correcting OCR text and adding lightweight metadata before the frontend is built.
+
+Supported fields:
+
+- `subject`
+- `title`
+- `corrected_text`
+- `question_type`
+- `difficulty`
+- `status`: one of `draft`, `recognized`, `corrected`, or `archived`
+
+Example:
+
+```powershell
+curl.exe -X PATCH "http://127.0.0.1:8000/api/questions/1" -H "Content-Type: application/json" -d "{\"subject\":\"math\",\"corrected_text\":\"corrected OCR text\",\"status\":\"corrected\"}"
+```
+
+Invalid statuses return HTTP 400.
 ## Download Asset File
 
 ### GET /api/assets/{asset_id}/file

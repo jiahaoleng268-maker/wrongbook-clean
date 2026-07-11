@@ -1,4 +1,4 @@
-﻿import importlib.util
+import importlib.util
 import json
 import os
 import socket
@@ -219,6 +219,69 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIsNone(retried["error_message"])
         self.assertIsNone(retried["started_at"])
         self.assertIsNone(retried["finished_at"])
+
+    def test_question_browse_detail_and_update_api(self) -> None:
+        upload = self.upload_image("browse.png")
+        job = self.request_json(
+            "GET",
+            "/api/ocr/jobs/next",
+            headers=self.worker_headers("question-api-worker"),
+        )["job"]
+        self.assertEqual(job["ocr_job_id"], upload["ocr_job_id"])
+
+        self.request_json(
+            "POST",
+            f"/api/ocr/jobs/{job['ocr_job_id']}/result",
+            payload={
+                "raw_json": {"mock": True},
+                "raw_text": "recognized formula text",
+                "model_name": "test-model",
+                "duration_ms": 20,
+                "confidence": 0.9,
+            },
+            headers=self.worker_headers(),
+        )
+
+        listed = self.request_json("GET", "/api/questions?status=recognized")
+        self.assertEqual(listed["total"], 1)
+        self.assertEqual(listed["items"][0]["question_id"], upload["question_id"])
+        self.assertEqual(listed["items"][0]["raw_text"], "recognized formula text")
+        self.assertEqual(listed["items"][0]["latest_ocr_job"]["status"], "succeeded")
+        self.assertEqual(listed["items"][0]["first_asset"]["asset_id"], upload["asset_id"])
+
+        detail = self.request_json("GET", f"/api/questions/{upload['question_id']}")["question"]
+        self.assertEqual(detail["status"], "recognized")
+        self.assertEqual(len(detail["assets"]), 1)
+        self.assertEqual(len(detail["ocr_jobs"]), 1)
+
+        updated = self.request_json(
+            "PATCH",
+            f"/api/questions/{upload['question_id']}",
+            payload={
+                "subject": "math",
+                "title": "Derivative practice",
+                "corrected_text": "corrected formula text",
+                "question_type": "calculation",
+                "difficulty": "medium",
+                "status": "corrected",
+            },
+        )["question"]
+        self.assertEqual(updated["subject"], "math")
+        self.assertEqual(updated["title"], "Derivative practice")
+        self.assertEqual(updated["corrected_text"], "corrected formula text")
+        self.assertEqual(updated["status"], "corrected")
+
+        searched = self.request_json("GET", "/api/questions?q=corrected&subject=math")
+        self.assertEqual(searched["total"], 1)
+        self.assertEqual(searched["items"][0]["question_id"], upload["question_id"])
+
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.request_json(
+                "PATCH",
+                f"/api/questions/{upload['question_id']}",
+                payload={"status": "bad-status"},
+            )
+        self.assertEqual(error.exception.code, 400)
 
     def test_mock_worker_processes_one_pending_job(self) -> None:
         upload = self.upload_image("worker.png")

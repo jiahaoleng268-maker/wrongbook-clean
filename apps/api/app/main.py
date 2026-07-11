@@ -8,9 +8,10 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from apps.api.app.database import get_db, init_db
@@ -26,6 +27,7 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp": {".webp"},
 }
 DEFAULT_WORKER_NAME = "unknown-worker"
+ALLOWED_QUESTION_STATUSES = {"draft", "recognized", "corrected", "archived"}
 
 
 class OCRResultPayload(BaseModel):
@@ -38,6 +40,15 @@ class OCRResultPayload(BaseModel):
 
 class OCRFailPayload(BaseModel):
     error_message: str
+
+
+class QuestionUpdatePayload(BaseModel):
+    subject: Optional[str] = None
+    title: Optional[str] = None
+    corrected_text: Optional[str] = None
+    question_type: Optional[str] = None
+    difficulty: Optional[str] = None
+    status: Optional[str] = None
 
 
 @asynccontextmanager
@@ -123,6 +134,59 @@ def _job_response(job: OCRJob) -> dict:
     }
 
 
+def _asset_response(asset: QuestionAsset) -> dict:
+    return {
+        "asset_id": asset.id,
+        "question_id": asset.question_id,
+        "file_path": asset.file_path,
+        "asset_type": asset.asset_type,
+        "width": asset.width,
+        "height": asset.height,
+        "sha256": asset.sha256,
+        "created_at": asset.created_at,
+        "updated_at": asset.updated_at,
+    }
+
+
+def _sorted_assets(question: Question) -> list[QuestionAsset]:
+    return sorted(question.assets, key=lambda asset: asset.id)
+
+
+def _sorted_ocr_jobs(question: Question) -> list[OCRJob]:
+    return sorted(question.ocr_jobs, key=lambda job: job.id)
+
+
+def _question_summary_response(question: Question) -> dict:
+    assets = _sorted_assets(question)
+    jobs = _sorted_ocr_jobs(question)
+    latest_job = jobs[-1] if jobs else None
+    first_asset = assets[0] if assets else None
+
+    return {
+        "question_id": question.id,
+        "subject": question.subject,
+        "title": question.title,
+        "raw_text": question.raw_text,
+        "corrected_text": question.corrected_text,
+        "question_type": question.question_type,
+        "difficulty": question.difficulty,
+        "source": question.source,
+        "status": question.status,
+        "asset_count": len(assets),
+        "first_asset": _asset_response(first_asset) if first_asset else None,
+        "latest_ocr_job": _job_response(latest_job) if latest_job else None,
+        "created_at": question.created_at,
+        "updated_at": question.updated_at,
+    }
+
+
+def _question_detail_response(question: Question) -> dict:
+    detail = _question_summary_response(question)
+    detail["assets"] = [_asset_response(asset) for asset in _sorted_assets(question)]
+    detail["ocr_jobs"] = [_job_response(job) for job in _sorted_ocr_jobs(question)]
+    return detail
+
+
 def _get_ocr_job_or_404(db: Session, job_id: int) -> OCRJob:
     job = db.get(OCRJob, job_id)
     if not job:
@@ -132,6 +196,17 @@ def _get_ocr_job_or_404(db: Session, job_id: int) -> OCRJob:
         )
 
     return job
+
+
+def _get_question_or_404(db: Session, question_id: int) -> Question:
+    question = db.get(Question, question_id)
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
+        )
+
+    return question
 
 
 def _resolve_upload_file_path(stored_file_path: str) -> Path:
@@ -271,6 +346,8 @@ def submit_ocr_result(
     question = db.get(Question, job.question_id)
     if question:
         question.raw_text = payload.raw_text
+        if payload.raw_text and question.status == "draft":
+            question.status = "recognized"
         question.updated_at = now
 
     db.commit()
@@ -317,6 +394,82 @@ def retry_ocr_job(job_id: int, db: Session = Depends(get_db)):
     db.refresh(job)
     return {"job": _job_response(job)}
 
+
+
+@app.get("/api/questions")
+def list_questions(
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    subject: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Question)
+
+    if status_filter:
+        query = query.filter(Question.status == status_filter)
+
+    if subject:
+        query = query.filter(Question.subject == subject)
+
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                Question.title.ilike(pattern),
+                Question.raw_text.ilike(pattern),
+                Question.corrected_text.ilike(pattern),
+                Question.subject.ilike(pattern),
+            )
+        )
+
+    total = query.count()
+    questions = (
+        query.order_by(Question.created_at.desc(), Question.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "items": [_question_summary_response(question) for question in questions],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/api/questions/{question_id}")
+def get_question(question_id: int, db: Session = Depends(get_db)):
+    question = _get_question_or_404(db, question_id)
+    return {"question": _question_detail_response(question)}
+
+
+@app.patch("/api/questions/{question_id}")
+def update_question(
+    question_id: int,
+    payload: QuestionUpdatePayload,
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "status" in updates and updates["status"] not in ALLOWED_QUESTION_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid question status.",
+        )
+
+    for field, value in updates.items():
+        setattr(question, field, value)
+
+    if updates:
+        question.updated_at = utc_now()
+        db.commit()
+        db.refresh(question)
+
+    return {"question": _question_detail_response(question)}
 
 @app.post("/api/questions/upload")
 async def upload_question_image(
