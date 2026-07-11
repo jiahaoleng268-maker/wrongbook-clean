@@ -193,6 +193,12 @@ class WrongBookIntegrationTest(unittest.TestCase):
         css, css_content_type = self.request_text("GET", "/app/static/app.css")
         self.assertIn("text/css", css_content_type)
         self.assertIn(".app-shell", css)
+        self.assertIn(".top-bar .ghost-button", css)
+        self.assertIn(".app-shell > *", css)
+
+        service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
+        self.assertIn("javascript", service_worker_content_type)
+        self.assertIn('wrongbook-web-v2', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)
@@ -221,6 +227,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         manifest = self.request_json("GET", "/app/static/manifest.webmanifest")
         self.assertEqual(manifest["short_name"], "WrongBook")
+        self.assertEqual(manifest["name"], "WrongBook \u9519\u9898\u6574\u7406")
         self.assertEqual(manifest["start_url"], "/app")
 
         service_worker, sw_content_type = self.request_text("GET", "/app/service-worker.js")

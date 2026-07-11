@@ -1,4 +1,4 @@
-const CACHE_NAME = "wrongbook-web-v1";
+const CACHE_NAME = "wrongbook-web-v2";
 const APP_SHELL = [
   "/app",
   "/app/static/app.css",

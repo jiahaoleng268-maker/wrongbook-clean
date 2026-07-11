@@ -40,6 +40,8 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - versioned JSON and readable Markdown question exports added
 - skip navigation, live status regions, visible focus, and keyboard shortcuts added
 - filtered JSON and Markdown question collection exports added
+- safe versioned JSON question import added
+- mobile-width overflow regression fixed and PWA acceptance checklist added
 
 ## Current Task
 
@@ -51,9 +53,10 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 
 Recommended order:
 
-1. collect real phone/PWA usage feedback
-2. improve formula OCR only if manual correction becomes a bottleneck
-3. add optional import support for the versioned JSON export format
+1. complete the checklist in `docs/mobile-acceptance.md` on a real phone
+2. collect one week of real phone/PWA usage feedback
+3. improve formula OCR only if manual correction becomes a bottleneck
+4. add duplicate detection and import preview before any merge workflow
 ## Task Boundaries
 
 Keep each task small.

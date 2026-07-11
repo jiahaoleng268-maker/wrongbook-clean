@@ -220,4 +220,8 @@ Keep these out of Git:
 
 The server is intended to stay lightweight. OCR and large-model workloads must run outside the server, on the Windows laptop worker.
 
-- ???? WrongBook v1 JSON??????????????? ID????OCR ????????
+- 支持导入 WrongBook v1 JSON；导入始终创建新题目，并忽略旧 ID、图片、OCR 任务和复习历史。
+
+## Mobile acceptance
+
+Before a release, run the real-device checklist in `docs/mobile-acceptance.md`. Automated checks cover UTF-8 responses, PWA metadata, and narrow viewport layout, but camera behavior and home-screen installation still require a physical phone.
