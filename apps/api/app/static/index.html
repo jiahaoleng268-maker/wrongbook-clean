@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#256f67" />
+    <title>WrongBook</title>
+    <link rel="manifest" href="/app/static/manifest.webmanifest" />
+    <link rel="icon" href="/app/static/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/app/static/app.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <div>
+        <p class="eyebrow">WrongBook</p>
+        <h1>错题整理</h1>
+      </div>
+      <button class="ghost-button" id="refreshButton" type="button">刷新</button>
+    </header>
+
+    <main class="app-shell">
+      <section class="upload-panel" aria-labelledby="uploadTitle">
+        <div class="section-heading">
+          <h2 id="uploadTitle">上传错题</h2>
+          <span id="uploadState" class="state-text">等待图片</span>
+        </div>
+        <form id="uploadForm" class="upload-form">
+          <label class="file-picker">
+            <span>拍照或选择图片</span>
+            <input id="imageInput" name="file" type="file" accept="image/*" capture="environment" />
+          </label>
+          <button id="uploadButton" class="primary-button" type="submit">上传</button>
+        </form>
+      </section>
+
+      <section class="workbench" aria-label="错题工作区">
+        <aside class="question-column">
+          <div class="section-heading">
+            <h2>错题列表</h2>
+            <span id="listCount" class="state-text">0 条</span>
+          </div>
+
+          <div class="filters">
+            <input id="searchInput" type="search" placeholder="搜索题目、科目或文本" autocomplete="off" />
+            <select id="statusFilter" aria-label="状态筛选">
+              <option value="">全部状态</option>
+              <option value="draft">草稿</option>
+              <option value="recognized">已识别</option>
+              <option value="corrected">已校正</option>
+              <option value="archived">已归档</option>
+            </select>
+          </div>
+
+          <div id="listStatus" class="inline-status"></div>
+          <div id="questionList" class="question-list" role="list"></div>
+        </aside>
+
+        <section class="detail-column" aria-labelledby="detailTitle">
+          <div id="emptyDetail" class="empty-detail">
+            <h2 id="detailTitle">选择一道错题</h2>
+            <p>上传后可以在这里校对 OCR 结果并补充科目、题型和难度。</p>
+          </div>
+
+          <form id="detailForm" class="detail-form" hidden>
+            <div class="detail-header">
+              <div>
+                <p class="eyebrow" id="detailId">Question</p>
+                <h2 id="detailHeading">错题详情</h2>
+              </div>
+              <button id="saveButton" class="primary-button" type="submit">保存</button>
+            </div>
+
+            <div id="detailStatus" class="inline-status"></div>
+
+            <div class="detail-grid">
+              <div class="image-frame">
+                <img id="questionImage" alt="错题图片" />
+              </div>
+
+              <div class="field-grid">
+                <label>
+                  <span>标题</span>
+                  <input id="titleInput" name="title" type="text" maxlength="255" />
+                </label>
+                <label>
+                  <span>科目</span>
+                  <input id="subjectInput" name="subject" type="text" maxlength="100" />
+                </label>
+                <label>
+                  <span>题型</span>
+                  <input id="typeInput" name="question_type" type="text" maxlength="100" />
+                </label>
+                <label>
+                  <span>难度</span>
+                  <select id="difficultyInput" name="difficulty">
+                    <option value="">未设置</option>
+                    <option value="easy">简单</option>
+                    <option value="medium">中等</option>
+                    <option value="hard">困难</option>
+                  </select>
+                </label>
+                <label>
+                  <span>状态</span>
+                  <select id="questionStatusInput" name="status">
+                    <option value="draft">草稿</option>
+                    <option value="recognized">已识别</option>
+                    <option value="corrected">已校正</option>
+                    <option value="archived">已归档</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="text-grid">
+              <label>
+                <span>OCR 原文</span>
+                <textarea id="rawTextInput" readonly></textarea>
+              </label>
+              <label>
+                <span>校正文</span>
+                <textarea id="correctedTextInput" name="corrected_text"></textarea>
+              </label>
+            </div>
+
+            <div class="detail-actions">
+              <button id="copyRawButton" class="ghost-button" type="button">采用 OCR</button>
+              <span id="saveState" class="state-text">未修改</span>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app/static/app.js" defer></script>
+  </body>
+</html>

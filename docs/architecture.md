@@ -23,7 +23,7 @@ Phone browser/PWA
 The server is responsible for:
 
 - serving the API
-- later serving the web frontend
+- serving the lightweight web frontend
 - storing uploaded images
 - storing metadata in SQLite
 - creating OCR jobs

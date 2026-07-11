@@ -20,6 +20,18 @@ Returns:
 {"status":"ok"}
 ```
 
+## Web App
+
+### GET /app
+
+Serves the minimal browser/PWA workflow for upload, browsing, detail viewing, and correction.
+
+Static frontend assets are served under:
+
+```text
+/app/static/
+```
+
 ## Upload Question Image
 
 ### POST /api/questions/upload
@@ -78,14 +90,13 @@ Current scope:
 - no OCR recognition
 - no OCR Worker client
 - no PaddleOCR
-- no frontend
 - no image binary data stored in SQLite
 
 ## Browse Questions
 
 ### GET /api/questions
 
-Returns a paginated list of questions for the future frontend/PWA.
+Returns a paginated list of questions for the Web/PWA.
 
 Query parameters:
 

@@ -25,6 +25,14 @@ The API should be available at:
 http://127.0.0.1:8000
 ```
 
+Open the local Web app at:
+
+```text
+http://127.0.0.1:8000/app
+```
+
+The Web app is served by FastAPI from `apps/api/app/static`. No Node.js or frontend build step is required for the MVP.
+
 ## Initialize Database
 
 The default SQLite database URL is:
@@ -48,6 +56,7 @@ PowerShell:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/
 Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-WebRequest http://127.0.0.1:8000/app
 ```
 
 Expected results:
@@ -69,7 +78,7 @@ curl http://127.0.0.1:8000/health
 
 ## Run Automated Tests
 
-The current tests start a temporary API server with an isolated SQLite database and upload directory. They do not use `data/app.db`, do not use `data/uploads`, and do not require PaddleOCR.
+The current tests start a temporary API server with an isolated SQLite database and upload directory. They also verify the static Web app shell. They do not use `data/app.db`, do not use `data/uploads`, and do not require PaddleOCR.
 
 PowerShell:
 

@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from apps.api.app.models import OCRJob, Question, QuestionAsset, utc_now
 
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
+STATIC_DIR = Path(__file__).parent / "static"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 CHUNK_SIZE = 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
@@ -58,6 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.mount("/app/static", StaticFiles(directory=STATIC_DIR), name="web-static")
 
 
 @app.get("/")
@@ -68,6 +71,25 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/app", include_in_schema=False)
+@app.get("/app/", include_in_schema=False)
+def web_app():
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/app/service-worker.js", include_in_schema=False)
+def web_service_worker():
+    return FileResponse(
+        STATIC_DIR / "service-worker.js",
+        media_type="application/javascript",
+    )
+
+
+@app.get("/app/{path:path}", include_in_schema=False)
+def web_app_fallback(path: str):
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:

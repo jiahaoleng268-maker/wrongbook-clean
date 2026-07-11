@@ -24,19 +24,20 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - PaddlePaddle GPU and PaddleOCR installed and verified on the Windows laptop
 - real local PaddleOCR engine wired behind `OCR_ENGINE=paddle`
 - question browse, detail, and edit APIs added
+- minimal static Web/PWA scaffold added for upload, browsing, detail, and correction
 
 ## Current Task
 
-- prepare a small frontend/PWA-facing question workflow
-- keep API-first development before building the full interface
+- add review scheduling and mistake tagging APIs
+- keep the first review workflow simple and API-first
 - keep the 2c2g server free of OCR/model workloads
 
 ## Next Tasks
 
 Recommended order:
 
-1. add minimal frontend/PWA scaffold for upload and question browsing
-2. add review scheduling and mistake tagging APIs
+1. add review scheduling and mistake tagging APIs
+2. show review and tag data in the Web app
 3. improve OCR text cleanup for math/chinese output
 
 ## Task Boundaries
@@ -59,5 +60,5 @@ The first version should avoid:
 ## Suggested Next Codex Prompt
 
 ```text
-Please add a minimal frontend/PWA scaffold for WrongBook that can upload an image, list questions, open question details, and edit corrected_text. Keep it lightweight, do not add heavy infrastructure, and keep OCR/model workloads outside the server.
+Please add simple review scheduling and mistake tagging APIs for WrongBook. Keep the data model lightweight, add focused integration tests, and do not add server-side OCR or heavy infrastructure.
 ```

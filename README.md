@@ -4,7 +4,7 @@ WrongBook is a personal wrong-question collection and review tool. The goal is t
 
 ## Current Status
 
-The project is currently a lightweight FastAPI backend in `apps/api` plus a local OCR Worker in `apps/ocr-worker`. It has health endpoints, the first SQLite/SQLAlchemy data model, local image upload, question browsing/editing APIs, polling-style OCR job endpoints, a safe uploaded-asset file endpoint, mock OCR mode, and local Windows PaddleOCR mode. It does not include server-side OCR processing or a frontend.
+The project is currently a lightweight FastAPI backend in `apps/api`, a static Web/PWA frontend served by the API, and a local OCR Worker in `apps/ocr-worker`. It has health endpoints, the first SQLite/SQLAlchemy data model, local image upload, question browsing/editing APIs, polling-style OCR job endpoints, a safe uploaded-asset file endpoint, mock OCR mode, and local Windows PaddleOCR mode. It does not include server-side OCR processing.
 
 ## Local API Startup
 
@@ -18,6 +18,24 @@ python -m uvicorn apps.api.app.main:app --reload
 ```
 
 The root `requirements.txt` is kept for compatibility, but `apps/api/requirements.txt` is the recommended dependency file for the API.
+
+## Web App
+
+Start the backend, then open:
+
+```text
+http://127.0.0.1:8000/app
+```
+
+The first frontend is intentionally small and dependency-free. It is served from `apps/api/app/static` and can:
+
+- upload one question image from a browser or phone camera
+- list recent questions
+- open question details
+- show the uploaded image and OCR text
+- edit `corrected_text`, title, subject, question type, difficulty, and status
+
+The frontend does not run OCR. OCR still happens in the separate Windows Worker.
 
 ## Database
 
@@ -126,7 +144,7 @@ python apps\ocr-worker\mock_worker.py --once
 
 ## Tests
 
-The integration tests use only the Python standard library plus the project runtime dependencies. They start a temporary local API server with an isolated SQLite database and upload directory, then verify the upload, asset download, OCR job lifecycle, and mock Worker flow.
+The integration tests use only the Python standard library plus the project runtime dependencies. They start a temporary local API server with an isolated SQLite database and upload directory, then verify the Web app shell, upload, asset download, OCR job lifecycle, and mock Worker flow.
 
 Run tests from the repository root:
 
@@ -140,6 +158,7 @@ python -m unittest discover -s tests
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
 - `GET /health` returns `{"status":"ok"}`
+- `GET /app` serves the browser/PWA question workflow
 - `POST /api/questions/upload` uploads one image and creates a pending OCR job
 - `GET /api/questions` lists questions with OCR text and lightweight metadata
 - `GET /api/questions/{id}` returns one question with assets and OCR jobs

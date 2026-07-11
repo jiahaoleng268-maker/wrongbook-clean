@@ -127,6 +127,16 @@ class WrongBookIntegrationTest(unittest.TestCase):
             response_body = response.read().decode("utf-8")
         return json.loads(response_body) if response_body else {}
 
+    def request_text(self, method: str, path: str) -> tuple[str, str]:
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            method=method,
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            content_type = response.headers.get("Content-Type", "")
+            response_body = response.read().decode("utf-8")
+        return response_body, content_type
+
     def upload_image(self, filename: str = "sample.png") -> dict:
         body, content_type = _multipart_body(
             field_name="file",
@@ -148,6 +158,32 @@ class WrongBookIntegrationTest(unittest.TestCase):
             "X-Worker-Token": WORKER_TOKEN,
             "X-Worker-Name": worker_name,
         }
+
+    def test_web_app_shell_and_static_assets(self) -> None:
+        html, content_type = self.request_text("GET", "/app")
+        self.assertIn("text/html", content_type)
+        self.assertIn("WrongBook", html)
+        self.assertIn('id="uploadForm"', html)
+
+        fallback_html, _ = self.request_text("GET", "/app/questions/1")
+        self.assertIn("WrongBook", fallback_html)
+
+        css, css_content_type = self.request_text("GET", "/app/static/app.css")
+        self.assertIn("text/css", css_content_type)
+        self.assertIn(".app-shell", css)
+
+        javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
+        self.assertIn("javascript", js_content_type)
+        self.assertIn("/api/questions/upload", javascript)
+        self.assertIn("serviceWorker", javascript)
+
+        manifest = self.request_json("GET", "/app/static/manifest.webmanifest")
+        self.assertEqual(manifest["short_name"], "WrongBook")
+        self.assertEqual(manifest["start_url"], "/app")
+
+        service_worker, sw_content_type = self.request_text("GET", "/app/service-worker.js")
+        self.assertIn("javascript", sw_content_type)
+        self.assertIn("CACHE_NAME", service_worker)
 
     def test_upload_asset_download_and_ocr_job_lifecycle(self) -> None:
         upload = self.upload_image()

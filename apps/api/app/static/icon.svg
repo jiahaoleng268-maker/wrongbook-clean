@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WrongBook">
+  <rect width="512" height="512" rx="96" fill="#256f67"/>
+  <path d="M150 112h170c36 0 66 30 66 66v222H180c-39 0-70-31-70-70V152c0-22 18-40 40-40z" fill="#ffffff"/>
+  <path d="M174 172h142M174 226h164M174 280h122" fill="none" stroke="#256f67" stroke-width="28" stroke-linecap="round"/>
+  <path d="M336 126v230l42-34 42 34V178c0-29-24-52-52-52h-32z" fill="#f2b84b"/>
+</svg>
