@@ -1,0 +1,4 @@
+# Optional Windows-laptop dependencies for OCR_ENGINE=formula
+# Install after PaddleOCR and GPU PaddlePaddle are working.
+tokenizers==0.23.1
+ftfy==6.3.1

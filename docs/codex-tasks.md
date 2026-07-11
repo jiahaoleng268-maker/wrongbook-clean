@@ -45,6 +45,7 @@ This file tracks completed work and the recommended next tasks for AI-assisted d
 - safe OCR re-recognition from the stored original image added
 - mobile bottom directory navigation and separate camera/gallery inputs added
 - OCR evaluation script and EXIF orientation preprocessing added
+- experimental PP-FormulaNet_plus-M engine evaluated; UI formula cropping required before production use
 
 ## Current Task
 

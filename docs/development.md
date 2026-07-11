@@ -187,3 +187,7 @@ The gallery input supports selecting multiple images. The browser uploads them s
 Keep real OCR images and matching `.txt` ground truth files under `data/ocr-evaluation/`, which is ignored by Git. `scripts/evaluate_ocr.py` accepts one image or a directory, initializes the selected engine once, and writes timing, confidence, recognized text, preprocessing metadata, and optional text similarity to JSON.
 
 The first local baseline used six representative pages rendered from a user-provided calculus exercise PDF plus one phone screenshot. General Chinese text achieved high PaddleOCR confidence, while fractions, radicals, superscripts, integrals, and two-dimensional formula structure remained the dominant errors. Keep the PDF and rendered samples local and out of Git.
+
+## Formula OCR experiment
+
+`OCR_ENGINE=formula` uses `PP-FormulaNet_plus-M` and requires the optional dependencies in `apps/ocr-worker/requirements-formula.txt`. GPU inference was verified on the local RTX 5070. Tight mathematical regions can preserve LaTeX structure, but page-level crops containing answer tables, blank lines, or unrelated headings produce repeated and hallucinated LaTeX. Keep the general PaddleOCR engine as the default. The next integration requirement is an explicit front-end crop workflow that sends only the formula region.

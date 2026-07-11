@@ -10,6 +10,7 @@ from PIL import Image, ImageOps
 import unicodedata
 
 from .base import OCREngine, OCREngineError, OCRResult
+from .runtime import configure_nvidia_dll_paths
 
 
 DEFAULT_DEVICE = "gpu"
@@ -77,7 +78,7 @@ class PaddleOCREngine(OCREngine):
         if missing:
             raise OCREngineError(self._missing_dependency_message(missing))
 
-        self._configure_nvidia_dll_paths()
+        configure_nvidia_dll_paths()
 
         try:
             import paddleocr
@@ -250,26 +251,6 @@ class PaddleOCREngine(OCREngine):
         if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
             return suffix
         return ".png"
-
-    @staticmethod
-    def _configure_nvidia_dll_paths() -> None:
-        if os.name != "nt":
-            return
-
-        site_packages = Path(sys.prefix) / "Lib" / "site-packages"
-        candidates = [
-            site_packages / "nvidia" / "cu13" / "bin" / "x86_64",
-            site_packages / "nvidia" / "cudnn" / "bin",
-        ]
-        for path in candidates:
-            if not path.is_dir():
-                continue
-            path_text = str(path)
-            os.environ["PATH"] = path_text + os.pathsep + os.environ.get("PATH", "")
-            try:
-                os.add_dll_directory(path_text)
-            except (AttributeError, FileNotFoundError, OSError):
-                pass
 
     @staticmethod
     def _missing_dependency_message(missing: list[str]) -> str:

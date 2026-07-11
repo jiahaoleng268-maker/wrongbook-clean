@@ -237,3 +237,7 @@ On phone-width screens the Web/PWA uses a bottom directory navigation with Home,
 ## OCR evaluation
 
 Run `python scripts/evaluate_ocr.py <image-or-directory>` on the Windows OCR laptop. The report is written under `data/ocr-evaluation/` by default and remains outside Git. PaddleOCR now applies EXIF orientation before recognition and records preprocessing metadata in `raw_json`.
+
+## Experimental formula OCR
+
+The Windows worker includes an experimental `OCR_ENGINE=formula` backed by `PP-FormulaNet_plus-M`. Install `apps/ocr-worker/requirements-formula.txt` after PaddleOCR. The model is cached outside Git under the user PaddleX model cache. Evaluation confirms that it recovers LaTeX structures such as fractions, roots, superscripts, and integral bounds, but broad page regions containing tables or answer lines can generate severe hallucinations. Do not make formula mode the default until the UI can send a tightly cropped formula region.
