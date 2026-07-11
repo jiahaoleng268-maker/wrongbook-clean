@@ -956,3 +956,27 @@ textarea:focus-visible,
 .formula-canvas-wrap canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; touch-action: none; }
 .helper-text { color: var(--muted-color, #64748b); }
 @media (max-width: 600px) { .formula-result-card { align-items: stretch; flex-direction: column; } .formula-result-card .ghost-button { width: 100%; } }
+
+/* PC-first workspace */
+body { padding-left: 220px; background: #f4f6fa; }
+.top-bar { position: sticky; top: 0; z-index: 20; }
+.desktop-sidebar { position: fixed; inset: 0 auto 0 0; width: 220px; padding: 24px 14px; display: flex; flex-direction: column; gap: 8px; background: #172033; color: #fff; z-index: 30; }
+.sidebar-brand { display: grid; gap: 4px; padding: 0 10px 24px; }
+.sidebar-brand strong { font-size: 1.25rem; }
+.sidebar-brand span, .sidebar-note { color: #aeb9cb; font-size: .82rem; }
+.desktop-sidebar .bottom-nav-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 0; border-radius: 10px; background: transparent; color: #dce5f2; text-align: left; }
+.desktop-sidebar .bottom-nav-item.is-active { background: #2c6bed; color: #fff; }
+.desktop-sidebar .bottom-nav-item span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,.1); }
+.sidebar-note { margin-top: auto; padding: 12px; line-height: 1.6; }
+.app-shell { max-width: none; padding: 20px; }
+.workbench { grid-template-columns: minmax(300px, 34%) minmax(520px, 1fr); min-height: calc(100vh - 120px); }
+.question-column, .detail-column, .upload-panel { box-shadow: 0 8px 30px rgba(31,45,61,.08); }
+.desktop-import-form { display: grid; gap: 18px; }
+.import-metadata-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
+.import-metadata-grid label, .paddle-text-field { display: grid; gap: 7px; }
+.paddle-text-field textarea { min-height: 300px; font-family: Consolas, "SFMono-Regular", monospace; line-height: 1.65; }
+.desktop-import-footer { display: flex; align-items: stretch; justify-content: space-between; gap: 16px; }
+.desktop-import-footer .source-picker { flex: 1; }
+[data-view="review"], [data-view="stats"] { display: none !important; }
+@media (max-width: 900px) { body { padding-left: 76px; } .desktop-sidebar { width: 76px; padding-inline: 8px; } .sidebar-brand span, .sidebar-brand strong, .desktop-sidebar .bottom-nav-item strong, .sidebar-note { display: none; } .desktop-sidebar .bottom-nav-item { justify-content: center; padding: 10px; } .import-metadata-grid { grid-template-columns: 1fr 1fr; } .workbench { grid-template-columns: 1fr; } }
+.legacy-ocr-panel, .legacy-review-panel { display: none !important; }

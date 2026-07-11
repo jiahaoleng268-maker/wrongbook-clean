@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,6 +64,7 @@ class OCRFailPayload(BaseModel):
 class QuestionUpdatePayload(BaseModel):
     subject: Optional[str] = None
     title: Optional[str] = None
+    raw_text: Optional[str] = None
     corrected_text: Optional[str] = None
     question_type: Optional[str] = None
     difficulty: Optional[str] = None
@@ -1438,6 +1439,71 @@ async def create_formula_ocr_job(
     finally:
         await file.close()
 
+
+@app.post("/api/questions/manual", status_code=status.HTTP_201_CREATED)
+async def create_manual_question(
+    title: Optional[str] = Form(None),
+    subject: Optional[str] = Form(None),
+    source: Optional[str] = Form(None),
+    question_type: Optional[str] = Form(None),
+    content: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    normalized_content = content.strip() if content else None
+    if not normalized_content and file is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide PaddleOCR text or an image.")
+
+    question = Question(
+        title=title.strip() if title else None,
+        subject=subject.strip() if subject else None,
+        source=source.strip() if source else "PaddleOCR Web",
+        question_type=question_type.strip() if question_type else None,
+        raw_text=normalized_content,
+        corrected_text=normalized_content,
+        status="draft",
+    )
+    target_path = None
+    try:
+        db.add(question)
+        db.flush()
+        asset = None
+        if file is not None:
+            extension = _validate_upload(file)
+            today = datetime.now()
+            target_dir = UPLOAD_DIR / f"{today:%Y}" / f"{today:%m}" / f"{today:%d}"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_path = target_dir / f"{uuid4().hex}{extension}"
+            digest = sha256()
+            total_size = 0
+            with target_path.open("wb") as output:
+                while True:
+                    chunk = await file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > MAX_UPLOAD_BYTES:
+                        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Uploaded file is too large. Maximum size is 20MB.")
+                    digest.update(chunk)
+                    output.write(chunk)
+            asset = QuestionAsset(
+                question_id=question.id,
+                file_path=target_path.as_posix(),
+                asset_type="original",
+                sha256=digest.hexdigest(),
+            )
+            db.add(asset)
+        db.commit()
+        db.refresh(question)
+        return {"question": _question_detail_response(question), "asset": _asset_response(asset) if asset else None}
+    except Exception:
+        db.rollback()
+        if target_path and target_path.exists():
+            target_path.unlink()
+        raise
+    finally:
+        if file is not None:
+            await file.close()
 
 @app.post("/api/questions/upload")
 async def upload_question_image(

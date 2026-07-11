@@ -22,29 +22,24 @@
     <main id="mainContent" class="app-shell" tabindex="-1">
       <section class="upload-panel app-view" data-view="home" aria-labelledby="uploadTitle">
         <div class="section-heading">
-          <h2 id="uploadTitle">上传错题</h2>
-          <span id="uploadState" class="state-text" role="status" aria-live="polite">等待图片</span>
+          <div><p class="eyebrow">PaddleOCR Web → WrongBook</p><h2 id="uploadTitle">导入识别结果</h2></div>
+          <span id="uploadState" class="state-text" role="status" aria-live="polite">粘贴文本即可建题</span>
         </div>
-        <form id="uploadForm" class="upload-form">
-          <div class="source-picker-grid" role="group" aria-label="&#36873;&#25321;&#22270;&#29255;&#26469;&#28304;">
-            <label class="source-picker camera-picker">
-              <strong>&#25293;&#29031;&#24405;&#20837;</strong>
-              <span>&#30452;&#25509;&#25171;&#24320;&#21518;&#32622;&#30456;&#26426;</span>
-              <input id="cameraInput" type="file" accept="image/*" capture="environment" />
-            </label>
-            <label class="source-picker gallery-picker">
-              <strong>&#20174;&#22270;&#24211;&#36873;&#25321;</strong>
-              <span>&#21487;&#19968;&#27425;&#36873;&#25321;&#22810;&#24352;&#29616;&#26377;&#22270;&#29255;</span>
-              <input id="galleryInput" type="file" accept="image/*" multiple />
-            </label>
+        <form id="uploadForm" class="desktop-import-form">
+          <div class="import-metadata-grid">
+            <label><span>标题</span><input id="manualTitleInput" type="text" maxlength="255" placeholder="例如：例 18 极限计算" /></label>
+            <label><span>科目</span><input id="manualSubjectInput" type="text" maxlength="100" placeholder="高等数学" /></label>
+            <label><span>来源</span><input id="manualSourceInput" type="text" maxlength="255" value="PaddleOCR Web" /></label>
+            <label><span>题型</span><input id="manualTypeInput" type="text" maxlength="100" placeholder="函数极限" /></label>
           </div>
-          <div class="selected-file-row">
-            <span id="selectedImageName">&#23578;&#26410;&#36873;&#25321;&#22270;&#29255;</span>
-            <button id="uploadButton" class="primary-button" type="submit" disabled>&#19978;&#20256;&#25152;&#36873;&#22270;&#29255;</button>
+          <label class="paddle-text-field"><span>PaddleOCR 文本 / Markdown / LaTeX</span><textarea id="paddleTextInput" rows="12" placeholder="在网页版 PaddleOCR 复制解析结果，然后粘贴到这里。"></textarea></label>
+          <div class="desktop-import-footer">
+            <label class="source-picker gallery-picker"><strong>附加原题图片（可选）</strong><span id="selectedImageName">尚未选择图片</span><input id="galleryInput" type="file" accept="image/*" /></label>
+            <input id="cameraInput" type="file" accept="image/*" hidden />
+            <button id="uploadButton" class="primary-button" type="submit">创建错题</button>
           </div>
         </form>
       </section>
-
       <section class="review-panel app-view" data-view="review" aria-labelledby="dueReviewTitle">
         <div class="section-heading">
           <div>
@@ -166,7 +161,7 @@
             <div class="detail-grid">
               <div class="image-frame">
                 <img id="questionImage" alt="错题图片" />
-                <button id="openFormulaCropButton" class="ghost-button formula-open-button" type="button">框选公式识别</button>
+
               </div>
 
               <div class="field-grid">
@@ -215,7 +210,7 @@
             </div>
 
 
-            <section class="formula-history" aria-labelledby="formulaHistoryTitle">
+            <section class="formula-history legacy-ocr-panel" aria-labelledby="formulaHistoryTitle">
               <div class="section-heading-row">
                 <h3 id="formulaHistoryTitle">公式识别历史</h3>
                 <span id="formulaHistoryState" class="state-text"></span>
@@ -259,7 +254,7 @@
                 <button id="restoreQuestionButton" class="ghost-button" type="button" hidden>恢复题目</button>
               </div>
               <button id="copyRawButton" class="ghost-button" type="button">采用 OCR</button>
-              <button id="rerunOcrButton" class="ghost-button" type="button">&#37325;&#26032;&#35782;&#21035;&#21407;&#22270;</button>
+
               <span id="saveState" class="state-text" role="status" aria-live="polite">未修改</span>
             </div>
           </form>
@@ -268,27 +263,14 @@
     </main>
 
 
-    <nav class="bottom-nav" aria-label="&#20027;&#35201;&#30446;&#24405;">
-      <button class="bottom-nav-item is-active" type="button" data-target-view="home" aria-current="page"><span>H</span><strong>&#39318;&#39029;</strong></button>
-      <button class="bottom-nav-item" type="button" data-target-view="library"><span>Q</span><strong>&#39064;&#24211;</strong></button>
-      <button class="bottom-nav-item" type="button" data-target-view="review"><span>R</span><strong>&#22797;&#20064;</strong></button>
-      <button class="bottom-nav-item" type="button" data-target-view="stats"><span>S</span><strong>&#32479;&#35745;</strong></button>
+    <nav class="desktop-sidebar" aria-label="主要目录">
+      <div class="sidebar-brand"><strong>WrongBook</strong><span>PC 错题管理器</span></div>
+      <button class="bottom-nav-item is-active" type="button" data-target-view="library" aria-current="page"><span>题</span><strong>题库</strong></button>
+      <button class="bottom-nav-item" type="button" data-target-view="home"><span>导</span><strong>导入</strong></button>
+      <div class="sidebar-note">复习与本地 OCR 已暂时冻结，历史数据仍保留。</div>
     </nav>
 
     <script src="/app/static/app.js" defer></script>
 
-    <dialog id="formulaCropDialog" class="formula-crop-dialog">
-      <div class="formula-crop-panel">
-        <div class="section-heading-row">
-          <div><p class="eyebrow">Formula OCR</p><h2>紧密框选公式区域</h2></div>
-          <button id="closeFormulaCropButton" class="ghost-button" type="button">关闭</button>
-        </div>
-        <p class="helper-text">拖动矩形，只保留公式，避免题干、表格和大面积空白。</p>
-        <div class="formula-canvas-wrap"><canvas id="formulaCropCanvas"></canvas></div>
-        <div class="detail-actions">
-          <button id="submitFormulaCropButton" class="primary-button" type="button">提交公式识别</button>
-          <span id="formulaCropState" class="state-text" role="status"></span>
-        </div>
-      </div>
-    </dialog>  </body>
+  </body>
 </html>

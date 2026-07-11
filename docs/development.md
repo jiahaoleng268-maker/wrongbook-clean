@@ -1,4 +1,4 @@
-﻿# Development
+# Development
 
 This document describes local development on Windows.
 
@@ -191,3 +191,9 @@ The first local baseline used six representative pages rendered from a user-prov
 ## Formula OCR experiment
 
 `OCR_ENGINE=formula` uses `PP-FormulaNet_plus-M` and requires the optional dependencies in `apps/ocr-worker/requirements-formula.txt`. GPU inference was verified on the local RTX 5070. Tight mathematical regions can preserve LaTeX structure, but page-level crops containing answer tables, blank lines, or unrelated headings produce repeated and hallucinated LaTeX. Keep the general PaddleOCR engine as the default. The next integration requirement is an explicit front-end crop workflow that sends only the formula region.
+
+## PC-first feature freeze
+
+The primary frontend does not start review data requests and does not expose local OCR, formula crop, or review navigation. These backend APIs and database tables remain covered by regression tests and must not be deleted without a separate backup and migration phase.
+
+For the current import workflow, use `POST /api/questions/manual` as multipart form data with optional `title`, `subject`, `source`, `question_type`, `content`, and `file`. At least `content` or `file` is required. The endpoint stores pasted PaddleOCR content in both `raw_text` and `corrected_text`, attaches the optional image, and creates no OCR job.

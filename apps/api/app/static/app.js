@@ -11,7 +11,7 @@
     historyOffset: 0,
     historyTotal: 0,
     selectedImageFiles: [],
-    activeView: "home",
+    activeView: "library",
     formulaSelection: null,
     formulaImage: null,
   };
@@ -41,6 +41,11 @@
     selectedImageName: $("selectedImageName"),
     uploadButton: $("uploadButton"),
     uploadState: $("uploadState"),
+    manualTitleInput: $("manualTitleInput"),
+    manualSubjectInput: $("manualSubjectInput"),
+    manualSourceInput: $("manualSourceInput"),
+    manualTypeInput: $("manualTypeInput"),
+    paddleTextInput: $("paddleTextInput"),
     refreshButton: $("refreshButton"),
     searchInput: $("searchInput"),
     statusFilter: $("statusFilter"),
@@ -703,7 +708,7 @@
     elements.rawTextInput.value = question.raw_text || "";
     elements.correctedTextInput.value = question.corrected_text || "";
     renderKnowledgePoints((question.knowledge_points || []).map((point) => point.knowledge_point_id));
-    renderFormulaHistory(question);
+    if (elements.formulaHistoryList) renderFormulaHistory(question);
     elements.knowledgePointSubjectInput.value = question.subject || "";
     elements.mistakeTagsInput.value = (question.mistake_tags || []).map((tag) => tag.name).join(", ");
     elements.nextReviewText.textContent = question.next_review ? formatDate(question.next_review.due_at) : "尚未安排";
@@ -718,7 +723,7 @@
       elements.questionImage.hidden = true;
     }
 
-    elements.rerunOcrButton.disabled = !firstAsset || Boolean(job && ["pending", "running"].includes(job.status));
+    if (elements.rerunOcrButton) elements.rerunOcrButton.disabled = !firstAsset || Boolean(job && ["pending", "running"].includes(job.status));
     const jobText = job ? jobLabels[job.status] || job.status : "暂无 OCR 任务";
     const confidence = job && job.confidence ? ` · 置信度 ${Math.round(job.confidence * 100)}%` : "";
     setStateText(elements.detailStatus, `${statusLabels[question.status] || question.status || "未知"} · ${jobText}${confidence}`);
@@ -745,46 +750,38 @@
 
   async function handleUpload(event) {
     event.preventDefault();
-    const files = state.selectedImageFiles;
-    if (!files.length) {
-      setStateText(elements.uploadState, "\u8bf7\u9009\u62e9\u56fe\u7247", "error");
+    const content = elements.paddleTextInput.value.trim();
+    const file = elements.galleryInput.files[0] || null;
+    if (!content && !file) {
+      setStateText(elements.uploadState, "请粘贴 PaddleOCR 文本或选择原题图片", "error");
       return;
     }
 
     elements.uploadButton.disabled = true;
-    let succeeded = 0;
-    const failures = [];
-    let lastQuestionId = null;
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
-      setStateText(elements.uploadState, `\u6b63\u5728\u4e0a\u4f20 ${index + 1} / ${files.length}\uff1a${file.name}`);
-      const formData = new FormData();
-      formData.append("file", file);
-      try {
-        const upload = await requestJSON("/api/questions/upload", { method: "POST", body: formData });
-        succeeded += 1;
-        lastQuestionId = upload.question_id;
-      } catch (error) {
-        failures.push(`${file.name}: ${error.message}`);
-      }
-    }
+    setStateText(elements.uploadState, "正在创建错题...");
+    const formData = new FormData();
+    formData.append("title", elements.manualTitleInput.value.trim());
+    formData.append("subject", elements.manualSubjectInput.value.trim());
+    formData.append("source", elements.manualSourceInput.value.trim());
+    formData.append("question_type", elements.manualTypeInput.value.trim());
+    formData.append("content", content);
+    if (file) formData.append("file", file);
 
-    elements.statusFilter.value = "";
-    elements.uploadForm.reset();
-    state.selectedImageFiles = [];
-    elements.selectedImageName.textContent = "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
-    elements.uploadButton.disabled = true;
-    await Promise.all([loadQuestions(), loadQuestionStats()]);
-    if (lastQuestionId) await selectQuestion(lastQuestionId);
-
-    if (failures.length) {
-      const summary = `\u5df2\u4e0a\u4f20 ${succeeded} \u5f20\uff0c\u5931\u8d25 ${failures.length} \u5f20\u3002${failures.slice(0, 2).join("\uff1b")}`;
-      setStateText(elements.uploadState, summary, "error");
-    } else {
-      setStateText(elements.uploadState, `\u5df2\u6210\u529f\u4e0a\u4f20 ${succeeded} \u5f20\uff0cOCR \u4efb\u52a1\u5df2\u521b\u5efa\u3002`, "success");
+    try {
+      const data = await requestJSON("/api/questions/manual", { method: "POST", body: formData });
+      elements.uploadForm.reset();
+      elements.manualSourceInput.value = "PaddleOCR Web";
+      elements.selectedImageName.textContent = "尚未选择图片";
+      await Promise.all([loadQuestions(), loadQuestionStats()]);
+      await selectQuestion(data.question.question_id);
+      switchView("library");
+      setStateText(elements.uploadState, `题目 #${data.question.question_id} 已创建`, "success");
+    } catch (error) {
+      setStateText(elements.uploadState, error.message, "error");
+    } finally {
+      elements.uploadButton.disabled = false;
     }
   }
-
   async function handleRerunOcr() {
     const question = state.currentQuestion;
     if (!question) return;
@@ -1038,37 +1035,14 @@
     });
 
     elements.galleryInput.addEventListener("change", () => {
-      const files = elements.galleryInput.files;
-      if (files.length) elements.cameraInput.value = "";
-      selectImageSources(files);
+      const file = elements.galleryInput.files[0];
+      elements.selectedImageName.textContent = file ? file.name : "尚未选择图片";
     });
-
     elements.bottomNavItems.forEach((item) => {
       item.addEventListener("click", () => switchView(item.dataset.targetView));
     });
 
-    elements.rerunOcrButton.addEventListener("click", handleRerunOcr);
-    elements.openFormulaCropButton.addEventListener("click", openFormulaCrop);
-    elements.closeFormulaCropButton.addEventListener("click", () => elements.formulaCropDialog.close());
-    elements.submitFormulaCropButton.addEventListener("click", submitFormulaCrop);
-    let formulaDragStart = null;
-    elements.formulaCropCanvas.addEventListener("pointerdown", (event) => {
-      formulaDragStart = canvasPoint(event);
-      elements.formulaCropCanvas.setPointerCapture(event.pointerId);
-    });
-    elements.formulaCropCanvas.addEventListener("pointermove", (event) => {
-      if (!formulaDragStart) return;
-      const point = canvasPoint(event);
-      state.formulaSelection = {
-        x: Math.min(formulaDragStart.x, point.x),
-        y: Math.min(formulaDragStart.y, point.y),
-        width: Math.abs(point.x - formulaDragStart.x),
-        height: Math.abs(point.y - formulaDragStart.y),
-      };
-      drawFormulaCanvas();
-    });
-    elements.formulaCropCanvas.addEventListener("pointerup", () => { formulaDragStart = null; });
-
+    if (elements.rerunOcrButton) elements.rerunOcrButton.addEventListener("click", handleRerunOcr);
     elements.copyRawButton.addEventListener("click", () => {
       elements.correctedTextInput.value = elements.rawTextInput.value;
       markDirty();
@@ -1119,9 +1093,6 @@
   registerServiceWorker();
   loadQuestions({ selectFirst: true });
   loadQuestionStats();
-  loadReviewHistory();
-  loadDueReviews();
-  loadReviewStats();
   loadKnowledgePoints();
   loadMistakeTagSuggestions();
 })();

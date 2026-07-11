@@ -2,6 +2,19 @@
 
 WrongBook is a personal wrong-question collection and review tool. The goal is to let a phone browser or PWA upload photos of questions, let the server store and organize them, and let a Windows laptop run OCR work separately from the low-resource server.
 
+## PC-first workflow
+
+WrongBook now uses a PC-first organization workflow. Use PaddleOCR Web for document and formula recognition, then paste its text, Markdown, or LaTeX into **导入**. An optional source image can be attached at creation time. `POST /api/questions/manual` creates the question without creating an OCR job, so the main application no longer depends on a local OCR Worker.
+
+The desktop interface uses a persistent left navigation with **题库** and **导入**. Review screens, local formula cropping, and rerun-OCR controls are frozen and hidden from the primary UI, while all historical OCR jobs, review rows, assets, and APIs remain intact for data safety and possible future reuse.
+
+Recommended daily flow:
+
+1. Parse a screenshot or PDF page in PaddleOCR Web.
+2. Copy the recognized text/Markdown/LaTeX.
+3. Open WrongBook **导入** and paste the result.
+4. Optionally attach the original question image.
+5. Create the question, then classify and correct it in **题库**.
 ## Current Status
 
 The project is currently a lightweight FastAPI backend in `apps/api`, a static Web/PWA frontend served by the API, and a local OCR Worker in `apps/ocr-worker`. The Web/PWA supports question correction, mistake tags, knowledge point assignment, and review scheduling. It has health endpoints, the first SQLite/SQLAlchemy data model, local image upload, question browsing/editing APIs, mistake tagging and review scheduling APIs, polling-style OCR job endpoints, a safe uploaded-asset file endpoint, mock OCR mode, and local Windows PaddleOCR mode. It does not include server-side OCR processing.

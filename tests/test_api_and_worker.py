@@ -192,6 +192,31 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertNotEqual(detail["raw_text"], r"\frac{1}{x}")
         formula_jobs = [job for job in detail["ocr_jobs"] if job["engine_name"] == "formula"]
         self.assertEqual(formula_jobs[-1]["raw_text"], r"\frac{1}{x}")
+    def test_manual_paddle_import_without_ocr_job(self) -> None:
+        boundary = f"----wrongbook-manual-{time.time_ns()}"
+        parts = [
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\n极限例题\r\n",
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"subject\"\r\n\r\n高等数学\r\n",
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"content\"\r\n\r\n求极限 $\\lim_{{x\\to0}}\\frac{{\\sin x}}{{x}}$\r\n",
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"question.png\"\r\nContent-Type: image/png\r\n\r\n".encode("utf-8"),
+            TEST_IMAGE_BYTES,
+            f"\r\n--{boundary}--\r\n",
+        ]
+        body = b"".join(part.encode("utf-8") if isinstance(part, str) else part for part in parts)
+        request = urllib.request.Request(
+            f"{self.base_url}/api/questions/manual",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            created = json.loads(response.read().decode("utf-8"))["question"]
+        self.assertEqual(created["title"], "极限例题")
+        self.assertEqual(created["subject"], "高等数学")
+        self.assertIn("\\lim", created["corrected_text"])
+        self.assertEqual(len(created["assets"]), 1)
+        self.assertEqual(created["ocr_jobs"], [])
+
     def worker_headers(self, worker_name: str = "test-worker") -> dict[str, str]:
         return {
             "X-Worker-Token": WORKER_TOKEN,
@@ -204,9 +229,9 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("WrongBook", html)
         self.assertIn('id="uploadForm"', html)
         self.assertIn('id="cameraInput"', html)
+        self.assertIn('id="paddleTextInput"', html)
+        self.assertIn('class="desktop-sidebar"', html)
         self.assertIn('id="galleryInput"', html)
-        self.assertIn('id="galleryInput" type="file" accept="image/*" multiple', html)
-        self.assertIn('class="bottom-nav"', html)
         self.assertIn('data-target-view="library"', html)
         self.assertIn('id="knowledgePointList"', html)
         self.assertIn('id="createKnowledgePointButton"', html)
@@ -242,11 +267,11 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v6', service_worker)
+        self.assertIn('wrongbook-web-v7', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)
-        self.assertIn("/api/questions/upload", javascript)
+        self.assertIn("/api/questions/manual", javascript)
         self.assertIn("/api/questions/stats", javascript)
         self.assertIn("/api/questions/export?", javascript)
         self.assertIn("/export?format=", javascript)
@@ -269,11 +294,8 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("/complete", javascript)
         self.assertIn("serviceWorker", javascript)
         self.assertIn("switchView", javascript)
-        self.assertIn("selectedImageFiles", javascript)
         self.assertNotIn("elements.fileLabel", javascript)
         self.assertIn("elements.selectedImageName.textContent", javascript)
-        self.assertIn("for (let index = 0; index < files.length; index += 1)", javascript)
-        self.assertIn("failures.push", javascript)
         self.assertIn("galleryInput", javascript)
 
         manifest = self.request_json("GET", "/app/static/manifest.webmanifest")

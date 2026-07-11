@@ -1,4 +1,9 @@
-﻿# Product Notes
+# Current product direction
+
+WrongBook is a PC-first personal wrong-question manager. PaddleOCR Web performs recognition; WrongBook receives, corrects, classifies, searches, stores, and exports the results. Local OCR and spaced-review features are frozen rather than deleted so existing user data remains safe.
+
+The next product milestone is source and chapter management, followed by a structured question/answer/analysis editor and a PaddleOCR page-splitting import workbench.
+# Product Notes
 
 WrongBook is a personal wrong-question organization tool. It is designed for collecting questions from photos, extracting text through OCR, correcting the extracted content, classifying questions, and reviewing them later.
 
