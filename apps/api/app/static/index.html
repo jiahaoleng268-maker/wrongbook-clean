@@ -166,6 +166,7 @@
             <div class="detail-grid">
               <div class="image-frame">
                 <img id="questionImage" alt="错题图片" />
+                <button id="openFormulaCropButton" class="ghost-button formula-open-button" type="button">框选公式识别</button>
               </div>
 
               <div class="field-grid">
@@ -213,7 +214,14 @@
               </label>
             </div>
 
-            <section class="learning-panel" aria-label="错因与复习计划">
+
+            <section class="formula-history" aria-labelledby="formulaHistoryTitle">
+              <div class="section-heading-row">
+                <h3 id="formulaHistoryTitle">公式识别历史</h3>
+                <span id="formulaHistoryState" class="state-text"></span>
+              </div>
+              <div id="formulaHistoryList" class="formula-history-list"></div>
+            </section>            <section class="learning-panel" aria-label="错因与复习计划">
               <div class="learning-block knowledge-point-block">
                 <span>知识点</span>
                 <div id="knowledgePointList" class="knowledge-point-list"></div>
@@ -268,5 +276,19 @@
     </nav>
 
     <script src="/app/static/app.js" defer></script>
-  </body>
+
+    <dialog id="formulaCropDialog" class="formula-crop-dialog">
+      <div class="formula-crop-panel">
+        <div class="section-heading-row">
+          <div><p class="eyebrow">Formula OCR</p><h2>紧密框选公式区域</h2></div>
+          <button id="closeFormulaCropButton" class="ghost-button" type="button">关闭</button>
+        </div>
+        <p class="helper-text">拖动矩形，只保留公式，避免题干、表格和大面积空白。</p>
+        <div class="formula-canvas-wrap"><canvas id="formulaCropCanvas"></canvas></div>
+        <div class="detail-actions">
+          <button id="submitFormulaCropButton" class="primary-button" type="button">提交公式识别</button>
+          <span id="formulaCropState" class="state-text" role="status"></span>
+        </div>
+      </div>
+    </dialog>  </body>
 </html>

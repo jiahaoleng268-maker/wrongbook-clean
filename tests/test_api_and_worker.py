@@ -153,6 +153,45 @@ class WrongBookIntegrationTest(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=10) as response:
             return json.loads(response.read().decode("utf-8"))
 
+    def upload_formula_crop(self, question_id: int, filename: str = "formula.png") -> dict:
+        body, content_type = _multipart_body("file", filename, "image/png", TEST_IMAGE_BYTES)
+        request = urllib.request.Request(
+            f"{self.base_url}/api/questions/{question_id}/formula-ocr",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def test_formula_crop_job_preserves_question_text(self) -> None:
+        upload = self.upload_image("source.png")
+        question_id = upload["question_id"]
+        self.request_json(
+            "PATCH",
+            f"/api/questions/{question_id}",
+            payload={"corrected_text": "人工校正文"},
+        )
+
+        formula = self.upload_formula_crop(question_id)
+        self.assertEqual(formula["asset"]["asset_type"], "formula_crop")
+        self.assertEqual(formula["job"]["engine_name"], "formula")
+
+        with self.assertRaises(urllib.error.HTTPError) as duplicate_error:
+            self.upload_formula_crop(question_id, "duplicate.png")
+        self.assertEqual(duplicate_error.exception.code, 409)
+
+        self.request_json(
+            "POST",
+            f"/api/ocr/jobs/{formula['job']['ocr_job_id']}/result",
+            payload={"raw_text": r"\frac{1}{x}", "raw_json": {"engine": "formula"}},
+            headers=self.worker_headers(),
+        )
+        detail = self.request_json("GET", f"/api/questions/{question_id}")["question"]
+        self.assertEqual(detail["corrected_text"], "人工校正文")
+        self.assertNotEqual(detail["raw_text"], r"\frac{1}{x}")
+        formula_jobs = [job for job in detail["ocr_jobs"] if job["engine_name"] == "formula"]
+        self.assertEqual(formula_jobs[-1]["raw_text"], r"\frac{1}{x}")
     def worker_headers(self, worker_name: str = "test-worker") -> dict[str, str]:
         return {
             "X-Worker-Token": WORKER_TOKEN,
@@ -203,7 +242,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v5', service_worker)
+        self.assertIn('wrongbook-web-v6', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

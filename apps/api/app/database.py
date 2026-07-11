@@ -2,7 +2,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 
@@ -44,6 +44,17 @@ def init_db() -> None:
     from apps.api.app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _apply_lightweight_migrations()
+
+
+def _apply_lightweight_migrations() -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("ocr_jobs")}
+    if "engine_name" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE ocr_jobs ADD COLUMN engine_name VARCHAR(50) NOT NULL DEFAULT 'paddle'"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_ocr_jobs_engine_name ON ocr_jobs (engine_name)"))
 
 
 def get_db():

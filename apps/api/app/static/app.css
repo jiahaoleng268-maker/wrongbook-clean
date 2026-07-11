@@ -942,3 +942,17 @@ textarea:focus-visible,
   .review-panel.app-view.is-mobile-active,
   .review-history-panel.app-view.is-mobile-active { display: grid; }
 }
+
+.formula-open-button { width: 100%; margin-top: .75rem; }
+.formula-history { margin-top: 1rem; }
+.section-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.formula-history-list { display: grid; gap: .75rem; }
+.formula-result-card { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem; border: 1px solid var(--border-color, #d8dee8); border-radius: 14px; background: #fff; }
+.formula-result-card code { overflow-wrap: anywhere; white-space: pre-wrap; }
+.formula-crop-dialog { width: min(960px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border: 0; border-radius: 20px; }
+.formula-crop-dialog::backdrop { background: rgba(12, 20, 34, .7); }
+.formula-crop-panel { padding: 1rem; }
+.formula-canvas-wrap { max-height: 65vh; overflow: auto; border-radius: 14px; background: #111827; touch-action: none; }
+.formula-canvas-wrap canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; touch-action: none; }
+.helper-text { color: var(--muted-color, #64748b); }
+@media (max-width: 600px) { .formula-result-card { align-items: stretch; flex-direction: column; } .formula-result-card .ghost-button { width: 100%; } }

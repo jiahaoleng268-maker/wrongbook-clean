@@ -33,6 +33,7 @@ from apps.api.app.models import (
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_FORMULA_CROP_BYTES = 5 * 1024 * 1024
 MAX_IMPORT_BYTES = 5 * 1024 * 1024
 MAX_IMPORT_QUESTIONS = 500
 CHUNK_SIZE = 1024 * 1024
@@ -213,6 +214,7 @@ def _job_response(job: OCRJob) -> dict:
         "asset_id": job.asset_id,
         "file_path": job.asset.file_path if job.asset else None,
         "status": job.status,
+        "engine_name": job.engine_name,
         "worker_name": job.worker_name,
         "model_name": job.model_name,
         "raw_json": job.raw_json,
@@ -692,7 +694,7 @@ def submit_ocr_result(
     job.error_message = None
 
     question = db.get(Question, job.question_id)
-    if question:
+    if question and job.engine_name != "formula":
         question.raw_text = payload.raw_text
         if payload.raw_text and question.status == "draft":
             question.status = "recognized"
@@ -1367,11 +1369,74 @@ def create_question_ocr_job(question_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail="Question has no image asset for OCR.",
         )
-    job = OCRJob(question=question, asset=asset, status="pending")
+    job = OCRJob(question=question, asset=asset, status="pending", engine_name="paddle")
     db.add(job)
     db.commit()
     db.refresh(job)
     return {"job": _job_response(job), "question": _question_detail_response(question)}
+
+
+@app.post("/api/questions/{question_id}/formula-ocr", status_code=status.HTTP_201_CREATED)
+async def create_formula_ocr_job(
+    question_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    active_job = (
+        db.query(OCRJob)
+        .filter(
+            OCRJob.question_id == question_id,
+            OCRJob.engine_name == "formula",
+            OCRJob.status.in_(["pending", "running"]),
+        )
+        .first()
+    )
+    if active_job:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Question already has an active formula OCR job.")
+    extension = _validate_upload(file)
+    today = datetime.now()
+    target_dir = UPLOAD_DIR / f"{today:%Y}" / f"{today:%m}" / f"{today:%d}"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"formula-{uuid4().hex}{extension}"
+    digest = sha256()
+    total_size = 0
+    try:
+        with target_path.open("wb") as output:
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_FORMULA_CROP_BYTES:
+                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Formula crop cannot exceed 5MB.")
+                digest.update(chunk)
+                output.write(chunk)
+        asset = QuestionAsset(
+            question_id=question.id,
+            file_path=target_path.as_posix(),
+            asset_type="formula_crop",
+            sha256=digest.hexdigest(),
+        )
+        db.add(asset)
+        db.flush()
+        job = OCRJob(
+            question_id=question.id,
+            asset_id=asset.id,
+            status="pending",
+            engine_name="formula",
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return {"job": _job_response(job), "asset": _asset_response(asset)}
+    except Exception:
+        db.rollback()
+        if target_path.exists():
+            target_path.unlink()
+        raise
+    finally:
+        await file.close()
 
 
 @app.post("/api/questions/upload")
@@ -1423,6 +1488,7 @@ async def upload_question_image(
             question_id=question.id,
             asset_id=asset.id,
             status="pending",
+            engine_name="paddle",
         )
         db.add(ocr_job)
         db.flush()

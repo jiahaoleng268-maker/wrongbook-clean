@@ -12,6 +12,8 @@
     historyTotal: 0,
     selectedImageFiles: [],
     activeView: "home",
+    formulaSelection: null,
+    formulaImage: null,
   };
 
   const statusLabels = {
@@ -110,6 +112,14 @@
     saveButton: $("saveButton"),
     copyRawButton: $("copyRawButton"),
     rerunOcrButton: $("rerunOcrButton"),
+    openFormulaCropButton: $("openFormulaCropButton"),
+    formulaHistoryList: $("formulaHistoryList"),
+    formulaHistoryState: $("formulaHistoryState"),
+    formulaCropDialog: $("formulaCropDialog"),
+    formulaCropCanvas: $("formulaCropCanvas"),
+    closeFormulaCropButton: $("closeFormulaCropButton"),
+    submitFormulaCropButton: $("submitFormulaCropButton"),
+    formulaCropState: $("formulaCropState"),
     saveState: $("saveState"),
     appViews: Array.from(document.querySelectorAll(".app-view")),
     bottomNavItems: Array.from(document.querySelectorAll(".bottom-nav-item")),
@@ -579,6 +589,102 @@
     }
   }
 
+  function renderFormulaHistory(question) {
+    const jobs = (question.ocr_jobs || []).filter((job) => job.engine_name === "formula").reverse();
+    elements.formulaHistoryList.replaceChildren();
+    if (!jobs.length) {
+      setStateText(elements.formulaHistoryState, "暂无公式识别");
+      return;
+    }
+    setStateText(elements.formulaHistoryState, `${jobs.length} 条`);
+    jobs.forEach((job) => {
+      const card = document.createElement("div");
+      card.className = "formula-result-card";
+      const text = document.createElement("code");
+      text.textContent = job.raw_text || jobLabels[job.status] || job.status;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost-button";
+      button.textContent = "插入校正文";
+      button.disabled = !job.raw_text;
+      button.addEventListener("click", () => {
+        const prefix = elements.correctedTextInput.value && !elements.correctedTextInput.value.endsWith("\n") ? "\n" : "";
+        elements.correctedTextInput.value += `${prefix}${job.raw_text || ""}`;
+        markDirty();
+      });
+      card.append(text, button);
+      elements.formulaHistoryList.append(card);
+    });
+  }
+
+  function drawFormulaCanvas() {
+    const canvas = elements.formulaCropCanvas;
+    const image = state.formulaImage;
+    if (!image) return;
+    const maxWidth = Math.min(900, window.innerWidth - 48);
+    const scale = Math.min(1, maxWidth / image.naturalWidth);
+    canvas.width = Math.round(image.naturalWidth * scale);
+    canvas.height = Math.round(image.naturalHeight * scale);
+    const context = canvas.getContext("2d");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const selection = state.formulaSelection;
+    if (selection) {
+      context.fillStyle = "rgba(32, 94, 166, .18)";
+      context.strokeStyle = "#205ea6";
+      context.lineWidth = 3;
+      context.fillRect(selection.x, selection.y, selection.width, selection.height);
+      context.strokeRect(selection.x, selection.y, selection.width, selection.height);
+    }
+  }
+
+  function canvasPoint(event) {
+    const rect = elements.formulaCropCanvas.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(elements.formulaCropCanvas.width, (event.clientX - rect.left) * elements.formulaCropCanvas.width / rect.width)),
+      y: Math.max(0, Math.min(elements.formulaCropCanvas.height, (event.clientY - rect.top) * elements.formulaCropCanvas.height / rect.height)),
+    };
+  }
+
+  function openFormulaCrop() {
+    if (!elements.questionImage.src) return;
+    const image = new Image();
+    image.onload = () => {
+      state.formulaImage = image;
+      state.formulaSelection = null;
+      drawFormulaCanvas();
+      elements.formulaCropDialog.showModal();
+      setStateText(elements.formulaCropState, "拖动框选公式");
+    };
+    image.src = elements.questionImage.src;
+  }
+
+  async function submitFormulaCrop() {
+    const question = state.currentQuestion;
+    const selection = state.formulaSelection;
+    if (!question || !selection || selection.width < 10 || selection.height < 10) {
+      setStateText(elements.formulaCropState, "请先框选公式区域", "error");
+      return;
+    }
+    const source = elements.formulaCropCanvas;
+    const crop = document.createElement("canvas");
+    crop.width = Math.round(selection.width);
+    crop.height = Math.round(selection.height);
+    crop.getContext("2d").drawImage(source, selection.x, selection.y, selection.width, selection.height, 0, 0, crop.width, crop.height);
+    const blob = await new Promise((resolve) => crop.toBlob(resolve, "image/png"));
+    const formData = new FormData();
+    formData.append("file", blob, "formula-crop.png");
+    elements.submitFormulaCropButton.disabled = true;
+    try {
+      const data = await requestJSON(`/api/questions/${question.question_id}/formula-ocr`, { method: "POST", body: formData });
+      elements.formulaCropDialog.close();
+      setStateText(elements.detailStatus, `公式 OCR 任务 #${data.job.ocr_job_id} 已创建`, "success");
+      await selectQuestion(question.question_id);
+    } catch (error) {
+      setStateText(elements.formulaCropState, error.message, "error");
+    } finally {
+      elements.submitFormulaCropButton.disabled = false;
+    }
+  }
   function renderDetail(question) {
     const firstAsset = (question.assets || [])[0] || question.first_asset;
     const job = latestJob(question);
@@ -597,6 +703,7 @@
     elements.rawTextInput.value = question.raw_text || "";
     elements.correctedTextInput.value = question.corrected_text || "";
     renderKnowledgePoints((question.knowledge_points || []).map((point) => point.knowledge_point_id));
+    renderFormulaHistory(question);
     elements.knowledgePointSubjectInput.value = question.subject || "";
     elements.mistakeTagsInput.value = (question.mistake_tags || []).map((tag) => tag.name).join(", ");
     elements.nextReviewText.textContent = question.next_review ? formatDate(question.next_review.due_at) : "尚未安排";
@@ -941,6 +1048,26 @@
     });
 
     elements.rerunOcrButton.addEventListener("click", handleRerunOcr);
+    elements.openFormulaCropButton.addEventListener("click", openFormulaCrop);
+    elements.closeFormulaCropButton.addEventListener("click", () => elements.formulaCropDialog.close());
+    elements.submitFormulaCropButton.addEventListener("click", submitFormulaCrop);
+    let formulaDragStart = null;
+    elements.formulaCropCanvas.addEventListener("pointerdown", (event) => {
+      formulaDragStart = canvasPoint(event);
+      elements.formulaCropCanvas.setPointerCapture(event.pointerId);
+    });
+    elements.formulaCropCanvas.addEventListener("pointermove", (event) => {
+      if (!formulaDragStart) return;
+      const point = canvasPoint(event);
+      state.formulaSelection = {
+        x: Math.min(formulaDragStart.x, point.x),
+        y: Math.min(formulaDragStart.y, point.y),
+        width: Math.abs(point.x - formulaDragStart.x),
+        height: Math.abs(point.y - formulaDragStart.y),
+      };
+      drawFormulaCanvas();
+    });
+    elements.formulaCropCanvas.addEventListener("pointerup", () => { formulaDragStart = null; });
 
     elements.copyRawButton.addEventListener("click", () => {
       elements.correctedTextInput.value = elements.rawTextInput.value;

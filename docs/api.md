@@ -678,3 +678,7 @@ Uploads a `.json` file in `wrongbook-question` v1 or `wrongbook-question-collect
 ### `POST /api/questions/{question_id}/ocr-jobs`
 
 Creates a new pending OCR job from the question's first stored image. It keeps previous OCR jobs as history and never clears `corrected_text`. The endpoint returns `409` when the question has no image or already has a pending/running OCR job.
+
+## Formula OCR crop
+
+`POST /api/questions/{question_id}/formula-ocr` accepts one tightly cropped image up to 5 MiB. It creates a `QuestionAsset` with `asset_type=formula_crop` and an OCR job with `engine_name=formula`. Only one pending or running formula job is allowed per question. Formula result submission updates only the OCR job; it never changes the question `raw_text`, `corrected_text`, or status.

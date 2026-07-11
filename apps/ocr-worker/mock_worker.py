@@ -33,8 +33,17 @@ class MockOCRWorker:
         self.server_url = server_url.rstrip("/")
         self.worker_token = worker_token
         self.worker_name = worker_name
-        self.engine = build_engine(ocr_engine)
+        self.default_engine_name = ocr_engine
+        self.engines = {ocr_engine: build_engine(ocr_engine)}
         self.poll_interval = poll_interval
+
+    def _engine_for_job(self, job: dict):
+        engine_name = str(job.get("engine_name") or self.default_engine_name).strip().lower()
+        if self.default_engine_name == "mock":
+            engine_name = "mock"
+        if engine_name not in self.engines:
+            self.engines[engine_name] = build_engine(engine_name)
+        return self.engines[engine_name]
 
     @property
     def headers(self) -> dict:
@@ -110,9 +119,10 @@ class MockOCRWorker:
         image_bytes: bytes,
         ocr_result: OCRResult,
         duration_ms: int,
+        job_engine_name: str,
     ) -> dict:
         raw_json = {
-            "engine": self.engine.name,
+            "engine": ocr_result.raw_json.get("engine", job_engine_name) if isinstance(ocr_result.raw_json, dict) else job_engine_name,
             "asset_id": asset_id,
             "file_path": file_path,
             "downloaded_bytes": len(image_bytes),
@@ -147,7 +157,8 @@ class MockOCRWorker:
                 raise WorkerRequestError("OCR job has no asset_id.")
 
             image_bytes = self._download_asset(asset_id)
-            ocr_result = self.engine.recognize(image_bytes=image_bytes, job=job)
+            engine = self._engine_for_job(job)
+            ocr_result = engine.recognize(image_bytes=image_bytes, job=job)
             duration_ms = int((time.monotonic() - started) * 1000)
             result = self.submit_result(
                 ocr_job_id=ocr_job_id,
@@ -156,6 +167,7 @@ class MockOCRWorker:
                 image_bytes=image_bytes,
                 ocr_result=ocr_result,
                 duration_ms=duration_ms,
+                job_engine_name=engine.name,
             )
             status = result.get("job", {}).get("status")
             print(f"Job {ocr_job_id} submitted with status={status}")

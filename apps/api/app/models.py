@@ -90,6 +90,7 @@ class OCRJob(Base):
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
     asset_id = Column(Integer, ForeignKey("question_assets.id"), nullable=True, index=True)
     status = Column(String(50), nullable=False, default="pending", index=True)
+    engine_name = Column(String(50), nullable=False, default="paddle", index=True)
     model_name = Column(String(255), nullable=True)
     worker_name = Column(String(255), nullable=True)
     raw_json = Column(Text, nullable=True)
