@@ -697,3 +697,10 @@ Assigning a chapter automatically assigns its source. A chapter from a different
 ## Smart folders and source maintenance
 
 `GET /api/questions` accepts `smart_filter=unclassified|missing_answer|missing_knowledge|recent`. Sources and chapters support `PATCH` updates. Deletion is intentionally restricted: only sources without questions or chapters and leaf chapters without questions can be deleted.
+## Question attachments
+
+- `POST /api/questions/{question_id}/assets` uploads an image with an `asset_type` multipart field.
+- `PATCH /api/assets/{asset_id}` changes the attachment type.
+- `DELETE /api/assets/{asset_id}` removes an unreferenced attachment and its local file.
+
+Assets referenced by OCR history return `409` on deletion to preserve historical data integrity.

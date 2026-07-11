@@ -49,6 +49,7 @@ ALLOWED_QUESTION_STATUSES = {"draft", "recognized", "corrected", "archived"}
 ALLOWED_REVIEW_RESULTS = {"again", "hard", "good", "easy"}
 MAX_MISTAKE_TAGS_PER_QUESTION = 20
 MAX_KNOWLEDGE_POINTS_PER_QUESTION = 30
+ALLOWED_ASSET_TYPES = {"question_image", "answer_image", "solution_image", "draft_image", "source_page", "attachment", "original", "formula_crop"}
 
 
 class OCRResultPayload(BaseModel):
@@ -123,6 +124,10 @@ class QuestionBulkUpdatePayload(BaseModel):
     source_id: Optional[int] = None
     chapter_id: Optional[int] = None
     status: Optional[str] = None
+
+
+class AssetUpdatePayload(BaseModel):
+    asset_type: str
 
 
 class MistakeTagUpdatePayload(BaseModel):
@@ -710,6 +715,60 @@ def get_asset_file(asset_id: int, db: Session = Depends(get_db)):
 
     return FileResponse(file_path)
 
+
+@app.post("/api/questions/{question_id}/assets", status_code=status.HTTP_201_CREATED)
+async def add_question_asset(
+    question_id: int,
+    asset_type: str = Form("question_image"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    question = _get_question_or_404(db, question_id)
+    if asset_type not in ALLOWED_ASSET_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid asset type.")
+    extension = _validate_upload(file)
+    today = datetime.now()
+    target_dir = UPLOAD_DIR / f"{today:%Y}" / f"{today:%m}" / f"{today:%d}"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"{uuid4().hex}{extension}"
+    digest = sha256(); total_size = 0
+    try:
+        with target_path.open("wb") as output:
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk: break
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Uploaded file is too large. Maximum size is 20MB.")
+                digest.update(chunk); output.write(chunk)
+        asset = QuestionAsset(question_id=question.id, file_path=target_path.as_posix(), asset_type=asset_type, sha256=digest.hexdigest())
+        db.add(asset); db.commit(); db.refresh(asset)
+        return {"asset": _asset_response(asset), "question": _question_detail_response(question)}
+    except Exception:
+        db.rollback()
+        if target_path.exists(): target_path.unlink()
+        raise
+    finally:
+        await file.close()
+
+
+@app.patch("/api/assets/{asset_id}")
+def update_question_asset(asset_id: int, payload: AssetUpdatePayload, db: Session = Depends(get_db)):
+    asset = db.get(QuestionAsset, asset_id)
+    if asset is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+    if payload.asset_type not in ALLOWED_ASSET_TYPES: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid asset type.")
+    asset.asset_type = payload.asset_type; asset.updated_at = utc_now(); db.commit(); db.refresh(asset)
+    return {"asset": _asset_response(asset)}
+
+
+@app.delete("/api/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_question_asset(asset_id: int, db: Session = Depends(get_db)):
+    asset = db.get(QuestionAsset, asset_id)
+    if asset is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+    if asset.ocr_jobs: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assets referenced by OCR history cannot be deleted.")
+    file_path = _resolve_upload_file_path(asset.file_path)
+    db.delete(asset); db.commit()
+    if file_path.is_file(): file_path.unlink()
 
 @app.get("/api/ocr/jobs/next", dependencies=[Depends(require_worker_token)])
 def claim_next_ocr_job(

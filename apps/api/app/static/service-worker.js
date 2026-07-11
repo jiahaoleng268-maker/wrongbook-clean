@@ -1,9 +1,11 @@
-const CACHE_NAME = "wrongbook-web-v10";
+const CACHE_NAME = "wrongbook-web-v11";
 const APP_SHELL = [
   "/app",
   "/app/static/app.css",
   "/app/static/app.js",
   "/app/static/icon.svg",
+  "/app/static/vendor/katex/katex.min.css",
+  "/app/static/vendor/katex/katex.min.js",
   "/app/static/manifest.webmanifest",
 ];
 

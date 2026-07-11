@@ -266,3 +266,6 @@ Source and chapter navigation now sends real `source_id` and `chapter_id` filter
 ## R2 smart library navigation
 
 The sidebar includes dynamic folders for unclassified questions, questions without answers, questions without knowledge points, and questions imported in the last seven days. Sources and empty leaf chapters can be renamed or safely deleted from their tree menu. The question pane can switch between card and compact table views.
+## Offline math and attachments
+
+KaTeX JavaScript, CSS, and fonts are stored under `apps/api/app/static/vendor/katex`, so math preview no longer depends on a CDN. The **原始资料** tab supports multiple image attachments classified as question, answer, solution, draft, source page, or general attachment. Images can be previewed full-screen, reclassified, and deleted when they are not referenced by historical OCR jobs.

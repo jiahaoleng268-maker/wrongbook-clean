@@ -192,6 +192,26 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertNotEqual(detail["raw_text"], r"\frac{1}{x}")
         formula_jobs = [job for job in detail["ocr_jobs"] if job["engine_name"] == "formula"]
         self.assertEqual(formula_jobs[-1]["raw_text"], r"\frac{1}{x}")
+    def test_question_asset_management(self) -> None:
+        upload = self.upload_image("asset-source.png")
+        question_id = upload["question_id"]
+        body, content_type = _multipart_body("file", "answer.png", "image/png", TEST_IMAGE_BYTES)
+        boundary = content_type.split("boundary=", 1)[1]
+        body = body.replace(
+            f"--{boundary}\r\n".encode("utf-8"),
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"asset_type\"\r\n\r\nanswer_image\r\n--{boundary}\r\n".encode("utf-8"),
+            1,
+        )
+        request = urllib.request.Request(f"{self.base_url}/api/questions/{question_id}/assets", data=body, headers={"Content-Type": content_type}, method="POST")
+        with urllib.request.urlopen(request, timeout=10) as response:
+            asset = json.loads(response.read().decode("utf-8"))["asset"]
+        self.assertEqual(asset["asset_type"], "answer_image")
+        updated = self.request_json("PATCH", f"/api/assets/{asset['asset_id']}", payload={"asset_type": "solution_image"})["asset"]
+        self.assertEqual(updated["asset_type"], "solution_image")
+        self.request_json("DELETE", f"/api/assets/{asset['asset_id']}")
+        detail = self.request_json("GET", f"/api/questions/{question_id}")["question"]
+        self.assertNotIn(asset["asset_id"], [item["asset_id"] for item in detail["assets"]])
+
     def test_smart_filters_and_source_maintenance(self) -> None:
         source = self.request_json("POST", "/api/sources", payload={"name": "待重命名资料"})["source"]
         chapter = self.request_json("POST", "/api/chapters", payload={"source_id": source["source_id"], "name": "旧章节"})["chapter"]
@@ -308,6 +328,8 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn('id="sourceTree"', html)
         self.assertIn('id="answerTextInput"', html)
         self.assertIn('id="latexPreviewContent"', html)
+        self.assertIn('id="assetGallery"', html)
+        self.assertIn('/app/static/vendor/katex/katex.min.js', html)
         self.assertIn('id="galleryInput"', html)
         self.assertIn('data-target-view="library"', html)
         self.assertIn('id="knowledgePointList"', html)
@@ -344,7 +366,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v10', service_worker)
+        self.assertIn('wrongbook-web-v11', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

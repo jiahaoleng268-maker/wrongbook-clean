@@ -8,7 +8,7 @@
     <link rel="manifest" href="/app/static/manifest.webmanifest" />
     <link rel="icon" href="/app/static/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/app/static/app.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" />
+    <link rel="stylesheet" href="/app/static/vendor/katex/katex.min.css" />
   </head>
   <body>
     <a class="skip-link" href="#mainContent">跳到主要内容</a>
@@ -203,7 +203,10 @@
 
             </section>
             <section class="detail-tab-panel" data-detail-panel="source">
-            <div class="text-grid">
+            <div class="asset-manager">
+              <div class="section-heading-row"><h3>图片附件</h3><div class="asset-upload-controls"><select id="newAssetType"><option value="question_image">题目图</option><option value="answer_image">答案图</option><option value="solution_image">解析图</option><option value="draft_image">草稿图</option><option value="source_page">原始页</option><option value="attachment">其他附件</option></select><input id="newAssetInput" type="file" accept="image/*" multiple /><button id="uploadAssetsButton" class="ghost-button" type="button">上传附件</button></div></div>
+              <div id="assetGallery" class="asset-gallery"></div><span id="assetState" class="state-text"></span>
+            </div>            <div class="text-grid">
               <label>
                 <span>OCR 原文</span>
                 <textarea id="rawTextInput" readonly></textarea>
@@ -279,7 +282,7 @@
       <section class="source-tree-panel"><div class="sidebar-section-title">智能目录</div><div id="smartFolders" class="source-tree smart-folders"><button type="button" data-smart-filter="">全部题目</button><button type="button" data-smart-filter="unclassified">未分类</button><button type="button" data-smart-filter="missing_answer">没有答案</button><button type="button" data-smart-filter="missing_knowledge">没有知识点</button><button type="button" data-smart-filter="recent">最近 7 天</button></div><div class="sidebar-section-title">资料目录</div><div id="sourceTree" class="source-tree"></div><button id="openSourceDialogButton" class="sidebar-action" type="button">+ 新建资料/章节</button></section><div class="sidebar-note">复习与本地 OCR 已暂时冻结，历史数据仍保留。</div>
     </nav>
 
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
+    <script defer src="/app/static/vendor/katex/katex.min.js"></script>
     <script src="/app/static/app.js" defer></script>
 
 
@@ -287,5 +290,6 @@
       <form id="sourceForm" class="source-form"><h2>新建资料</h2><input id="sourceNameInput" required placeholder="资料名称" /><input id="sourceSubjectInput" placeholder="科目" /><select id="sourceTypeInput"><option value="教材">教材</option><option value="PDF">PDF</option><option value="试卷">试卷</option><option value="其他">其他</option></select><button class="primary-button" type="submit">创建资料</button></form>
       <form id="chapterForm" class="source-form"><h2>新建章节</h2><select id="chapterSourceInput" required></select><select id="parentChapterInput"><option value="">无上级章节</option></select><input id="chapterNameInput" required placeholder="章节名称" /><button class="primary-button" type="submit">创建章节</button></form>
       <button id="closeSourceDialogButton" class="ghost-button" type="button">关闭</button><span id="sourceDialogState" class="state-text"></span>
-    </dialog>  </body>
+    </dialog>    <dialog id="assetPreviewDialog" class="asset-preview-dialog"><img id="assetPreviewImage" alt="附件预览" /><button id="closeAssetPreviewButton" class="ghost-button" type="button">关闭</button></dialog>
+  </body>
 </html>

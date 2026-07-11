@@ -170,6 +170,14 @@
     tableViewButton: $("tableViewButton"),
     answerPreview: $("answerPreview"),
     solutionPreview: $("solutionPreview"),
+    assetGallery: $("assetGallery"),
+    assetState: $("assetState"),
+    newAssetType: $("newAssetType"),
+    newAssetInput: $("newAssetInput"),
+    uploadAssetsButton: $("uploadAssetsButton"),
+    assetPreviewDialog: $("assetPreviewDialog"),
+    assetPreviewImage: $("assetPreviewImage"),
+    closeAssetPreviewButton: $("closeAssetPreviewButton"),
     detailTabs: Array.from(document.querySelectorAll("[data-detail-tab]")),
     detailPanels: Array.from(document.querySelectorAll("[data-detail-panel]")),
     appViews: Array.from(document.querySelectorAll(".app-view")),
@@ -650,6 +658,34 @@
     }
   }
 
+  const assetTypeLabels = { original: "原图", question_image: "题目图", answer_image: "答案图", solution_image: "解析图", draft_image: "草稿图", source_page: "原始页", attachment: "附件", formula_crop: "公式裁剪" };
+
+  function renderAssetGallery(question) {
+    elements.assetGallery.replaceChildren();
+    const assets = question.assets || [];
+    if (!assets.length) { elements.assetGallery.textContent = "暂无附件"; return; }
+    assets.forEach((asset) => {
+      const card = document.createElement("article"); card.className = "asset-card";
+      const image = document.createElement("img"); image.src = assetUrl(asset); image.alt = assetTypeLabels[asset.asset_type] || asset.asset_type;
+      image.addEventListener("click", () => { elements.assetPreviewImage.src = image.src; elements.assetPreviewDialog.showModal(); });
+      const select = document.createElement("select");
+      Object.entries(assetTypeLabels).filter(([value]) => value !== "formula_crop").forEach(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; select.append(option); });
+      select.value = asset.asset_type;
+      select.addEventListener("change", async () => { try { await requestJSON(`/api/assets/${asset.asset_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset_type: select.value }) }); setStateText(elements.assetState, "附件类型已更新", "success"); } catch (error) { setStateText(elements.assetState, error.message, "error"); } });
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "danger-button"; remove.textContent = "删除";
+      remove.addEventListener("click", async () => { if (!window.confirm("确定删除这张附件图片？")) return; try { await requestJSON(`/api/assets/${asset.asset_id}`, { method: "DELETE" }); await selectQuestion(question.question_id); setStateText(elements.assetState, "附件已删除", "success"); } catch (error) { setStateText(elements.assetState, error.message, "error"); } });
+      card.append(image, select, remove); elements.assetGallery.append(card);
+    });
+  }
+
+  function orderedChapters(chapters) {
+    const byParent = new Map();
+    chapters.forEach((chapter) => { const key = chapter.parent_id || 0; if (!byParent.has(key)) byParent.set(key, []); byParent.get(key).push(chapter); });
+    byParent.forEach((items) => items.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)));
+    const result = [];
+    function visit(parentId, depth) { (byParent.get(parentId) || []).forEach((chapter) => { result.push({ chapter, depth }); visit(chapter.chapter_id, depth + 1); }); }
+    visit(0, 0); return result;
+  }
   function renderFormulaHistory(question) {
     const jobs = (question.ocr_jobs || []).filter((job) => job.engine_name === "formula").reverse();
     elements.formulaHistoryList.replaceChildren();
@@ -788,7 +824,7 @@
       const group = document.createElement("div"); group.className = "source-tree-group";
       const title = document.createElement("button"); title.type = "button"; title.textContent = source.name; title.dataset.sourceId = source.source_id;
       group.append(title);
-      (source.chapters || []).forEach((chapter) => { const row = document.createElement("div"); row.className = "source-tree-row chapter-row"; const item = document.createElement("button"); item.type = "button"; item.textContent = `↳ ${chapter.name}`; item.dataset.chapterId = chapter.chapter_id; const menu = document.createElement("button"); menu.type = "button"; menu.className = "tree-menu"; menu.textContent = "⋯"; menu.dataset.manageChapterId = chapter.chapter_id; row.append(item, menu); group.append(row); });
+      orderedChapters(source.chapters || []).forEach(({ chapter, depth }) => { const row = document.createElement("div"); row.className = "source-tree-row chapter-row"; const item = document.createElement("button"); item.type = "button"; item.style.paddingLeft = `${24 + depth * 14}px`; item.textContent = `${depth ? "└ " : "↳ "}${chapter.name}`; item.dataset.chapterId = chapter.chapter_id; const menu = document.createElement("button"); menu.type = "button"; menu.className = "tree-menu"; menu.textContent = "⋯"; menu.dataset.manageChapterId = chapter.chapter_id; row.append(item, menu); group.append(row); });
       elements.sourceTree.append(group);
     });
   }
@@ -833,6 +869,7 @@
     renderLatexPreview();
     renderKnowledgePoints((question.knowledge_points || []).map((point) => point.knowledge_point_id));
     if (elements.formulaHistoryList) renderFormulaHistory(question);
+    renderAssetGallery(question);
     elements.knowledgePointSubjectInput.value = question.subject || "";
     elements.mistakeTagsInput.value = (question.mistake_tags || []).map((tag) => tag.name).join(", ");
     elements.nextReviewText.textContent = question.next_review ? formatDate(question.next_review.due_at) : "尚未安排";
@@ -1208,6 +1245,16 @@
       elements.searchInput.value = "";
       state.questionOffset = 0; loadQuestions();
     });
+    elements.uploadAssetsButton.addEventListener("click", async () => {
+      const question = state.currentQuestion; const files = Array.from(elements.newAssetInput.files || []);
+      if (!question || !files.length) { setStateText(elements.assetState, "请选择图片", "error"); return; }
+      elements.uploadAssetsButton.disabled = true;
+      try {
+        for (const file of files) { const formData = new FormData(); formData.append("asset_type", elements.newAssetType.value); formData.append("file", file); await requestJSON(`/api/questions/${question.question_id}/assets`, { method: "POST", body: formData }); }
+        elements.newAssetInput.value = ""; await selectQuestion(question.question_id); setStateText(elements.assetState, `已上传 ${files.length} 张附件`, "success");
+      } catch (error) { setStateText(elements.assetState, error.message, "error"); } finally { elements.uploadAssetsButton.disabled = false; }
+    });
+    elements.closeAssetPreviewButton.addEventListener("click", () => elements.assetPreviewDialog.close());
     elements.smartFolders.addEventListener("click", (event) => {
       const target = event.target.closest("button"); if (!target) return;
       state.smartFilter = target.dataset.smartFilter || "";
