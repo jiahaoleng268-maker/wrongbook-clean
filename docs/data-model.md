@@ -1,4 +1,4 @@
-﻿# Data Model
+# Data Model
 
 WrongBook uses SQLite for the first version. SQLAlchemy defines the tables and creates them during application startup or through the manual initialization command.
 
@@ -31,7 +31,7 @@ Important fields:
 - `question_type`: type of question
 - `difficulty`: difficulty label
 - `source`: book, exam, worksheet, or other source
-- `status`: string status such as `draft`, `ready`, or `archived`
+- `status`: `draft`, `recognized`, `corrected`, or `archived`
 - `created_at`, `updated_at`: timestamps
 
 ### question_assets
@@ -93,7 +93,7 @@ Important fields:
 - `question_id`: related question
 - `due_at`: planned review time
 - `reviewed_at`: actual review time
-- `result`: `remembered`, `hesitated`, `forgot`, or `wrong_again`
+- `result`: `again`, `hard`, `good`, or `easy`
 - `next_due_at`: next planned review time
 
 ### attempts
@@ -118,4 +118,4 @@ Many-to-many relationship table between `questions` and `mistake_tags`.
 
 ## Current Scope
 
-This data model does not implement image upload, OCR job APIs, OCR processing, a worker, or a frontend. Those should be added in later small tasks.
+The current application uses these tables for image upload, OCR jobs, reusable hierarchical knowledge points, mistake tags, and review scheduling. OCR processing still runs only in the separate Windows Worker.

@@ -4,7 +4,7 @@ WrongBook is a personal wrong-question collection and review tool. The goal is t
 
 ## Current Status
 
-The project is currently a lightweight FastAPI backend in `apps/api`, a static Web/PWA frontend served by the API, and a local OCR Worker in `apps/ocr-worker`. It has health endpoints, the first SQLite/SQLAlchemy data model, local image upload, question browsing/editing APIs, polling-style OCR job endpoints, a safe uploaded-asset file endpoint, mock OCR mode, and local Windows PaddleOCR mode. It does not include server-side OCR processing.
+The project is currently a lightweight FastAPI backend in `apps/api`, a static Web/PWA frontend served by the API, and a local OCR Worker in `apps/ocr-worker`. The Web/PWA supports question correction, mistake tags, knowledge point assignment, and review scheduling. It has health endpoints, the first SQLite/SQLAlchemy data model, local image upload, question browsing/editing APIs, mistake tagging and review scheduling APIs, polling-style OCR job endpoints, a safe uploaded-asset file endpoint, mock OCR mode, and local Windows PaddleOCR mode. It does not include server-side OCR processing.
 
 ## Local API Startup
 
@@ -128,7 +128,7 @@ OCR_ENGINE=mock
 Supported worker engine modes:
 
 - `OCR_ENGINE=mock` is the default and returns predictable fake OCR text.
-- `OCR_ENGINE=paddle` runs the local Windows PaddleOCR engine when PaddleOCR, PaddlePaddle, and local models are available. It is for the laptop Worker only, not the server.
+- `OCR_ENGINE=paddle` runs the local Windows PaddleOCR engine when PaddleOCR, PaddlePaddle, and local models are available. It conservatively normalizes readable OCR text while retaining original recognition fields in `raw_json`. It is for the laptop Worker only, not the server.
 
 Run continuously:
 
@@ -158,11 +158,26 @@ python -m unittest discover -s tests
 
 - `GET /` returns `{"message":"WrongBook API is running"}`
 - `GET /health` returns `{"status":"ok"}`
-- `GET /app` serves the browser/PWA question workflow
+- `GET /health/details` checks the database, upload path, and free disk space
+- `GET /app` serves the browser/PWA workflow for upload, correction, mistake tags, review scheduling, and due-review completion
 - `POST /api/questions/upload` uploads one image and creates a pending OCR job
 - `GET /api/questions` lists questions with OCR text and lightweight metadata
+- `GET /api/questions/stats` returns status, subject, and knowledge-point aggregates
 - `GET /api/questions/{id}` returns one question with assets and OCR jobs
 - `PATCH /api/questions/{id}` updates corrected text and metadata
+- `POST /api/questions/{id}/archive` safely archives a question
+- `POST /api/questions/{id}/restore` restores an archived question
+- `GET /api/questions/{id}/export` downloads JSON or Markdown question data
+- `GET /api/knowledge-points` lists reusable hierarchical knowledge points
+- `POST /api/knowledge-points` creates one knowledge point
+- `PUT /api/questions/{id}/knowledge-points` replaces a question's knowledge points
+- `GET /api/mistake-tags` lists reusable mistake tags
+- `PUT /api/questions/{id}/mistake-tags` replaces a question's mistake tags
+- `POST /api/questions/{id}/reviews` schedules one pending review
+- `GET /api/reviews/history` lists and filters completed review records
+- `GET /api/reviews/due` lists due reviews
+- `GET /api/reviews/stats` returns current and seven-day review statistics
+- `POST /api/reviews/{id}/complete` records a review result and optionally schedules the next review
 - `GET /api/assets/{asset_id}/file` returns an uploaded asset file only if it is under `UPLOAD_DIR`
 - `GET /api/ocr/jobs/next` claims a pending OCR job for a token-authenticated Worker
 - `GET /api/ocr/jobs/{id}` returns OCR job status and details
@@ -170,6 +185,17 @@ python -m unittest discover -s tests
 - `POST /api/ocr/jobs/{id}/result` stores OCR output and succeeds the job
 - `POST /api/ocr/jobs/{id}/fail` stores failure details
 - `POST /api/ocr/jobs/{id}/retry` retries a failed job
+
+## Backup and Restore
+
+Create and verify a backup containing SQLite data and uploaded images:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\backup_restore.py backup
+.\.venv\Scripts\python.exe scripts\backup_restore.py verify backups\wrongbook-YYYYMMDD-HHMMSS.zip
+```
+
+Stop the API before restore. Restore refuses existing targets unless `--replace` is provided; replacement preserves current data in a `pre-restore-*` directory. See `docs/backup-restore.md` for the full procedure.
 
 ## Repository Safety
 

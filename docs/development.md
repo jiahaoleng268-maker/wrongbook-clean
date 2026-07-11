@@ -120,3 +120,48 @@ pip install -r apps\api\requirements.txt
 ```
 
 Do not introduce new dependencies unless a task explicitly requires them.
+
+## Web Review Workflow
+
+The no-build Web/PWA supports editing comma-separated mistake tags, scheduling one pending review per question, and completing due reviews from the **今日复习** section.
+
+Review results create the next review with fixed MVP intervals:
+
+- `again`: 10 minutes
+- `hard`: 1 day
+- `good`: 3 days
+- `easy`: 7 days
+
+Manual verification: upload a question, save tags, schedule a due time, refresh, then complete the review and confirm the next due time is shown.
+
+## Web Knowledge Point Workflow
+
+Question details show all reusable knowledge points as mobile-friendly checkboxes. Saving the question replaces its knowledge point assignments. A new knowledge point can be created inline with an optional subject; when the subject input is empty, the current question subject is used. Newly created points are selected automatically but are not assigned until the question is saved.
+
+## Review Statistics
+
+The **今日复习** panel shows current due reviews, today's completed count, seven-day completed count, seven-day mastered rate, and the four result counts. Statistics use UTC day boundaries to match server-side review timestamps and refresh after scheduling or completing a review.
+
+## Question Library Statistics
+
+The Web/PWA **题库概览** section displays total questions, status counts, subject counts, and the most-used knowledge points. It refreshes after question changes and when the main refresh button is used.
+
+## Archive and Review History
+
+Question details provide explicit archive and restore actions. Archiving is reversible and never deletes images or related learning data. The **复习历史** section shows completed reviews and filters by result and date range; selecting a history row opens the related question.
+
+## Pagination
+
+Question results and completed review history use 20-item pages with previous/next controls. Changing question search/status filters or review-history filters resets the related list to the first page.
+
+## Export and Keyboard Access
+
+Question details provide JSON and Markdown download buttons. JSON is intended for structured interchange; Markdown is intended for notes and manual archives. Images remain separate uploaded assets.
+
+Keyboard shortcuts:
+
+- `/`: focus question search when not editing a field
+- `Ctrl+S` or `Cmd+S`: save the selected question
+- `R`: refresh lists and statistics when not editing a field
+
+The page includes a skip link, visible focus outlines, polite live regions for asynchronous status messages, and reduced-motion support.

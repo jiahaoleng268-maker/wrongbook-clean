@@ -176,6 +176,67 @@ curl.exe -X PATCH "http://127.0.0.1:8000/api/questions/1" -H "Content-Type: appl
 ```
 
 Invalid statuses return HTTP 400.
+## Mistake Tags
+
+### GET /api/mistake-tags
+
+Lists reusable mistake tags. Optional query parameters are `q`, `limit`, and `offset`.
+
+### PUT /api/questions/{question_id}/mistake-tags
+
+Replaces all mistake tags assigned to a question. Missing names are created automatically. Names are trimmed, matched case-insensitively, de-duplicated, and limited to 20 tags per question.
+
+Request body:
+
+```json
+{
+  "names": ["calculation error", "concept unclear"]
+}
+```
+
+The response contains the updated question detail, including `mistake_tags`.
+
+## Review Scheduling
+
+### POST /api/questions/{question_id}/reviews
+
+Creates one pending review for a question. A question can have only one incomplete review at a time.
+
+Request body:
+
+```json
+{
+  "due_at": "2026-07-12T09:00:00Z"
+}
+```
+
+Returns HTTP 409 when the question already has a pending review.
+
+### GET /api/reviews/due
+
+Lists incomplete reviews due on or before `before`. When `before` is omitted, the current UTC time is used. The response embeds a lightweight question summary for each review.
+
+Query parameters:
+
+- `before`: optional ISO 8601 datetime
+- `limit`: default `50`, maximum `200`
+- `offset`: default `0`
+
+### POST /api/reviews/{review_id}/complete
+
+Completes a pending review. Valid results are `again`, `hard`, `good`, and `easy`. Supplying `next_due_at` also creates the next pending review for the same question.
+
+Request body:
+
+```json
+{
+  "result": "good",
+  "next_due_at": "2026-07-19T09:00:00Z"
+}
+```
+
+Question summaries now include `mistake_tags` and `next_review`. Question detail responses also include the full `reviews` history.
+
 ## Download Asset File
 
 ### GET /api/assets/{asset_id}/file
@@ -495,3 +556,109 @@ Response:
 ```
 
 Calling retry on a job that is not `failed` returns HTTP 409.
+
+## Knowledge Points
+
+### `GET /api/knowledge-points`
+
+Lists reusable knowledge points. Optional query parameters: `subject`, `parent_id`, `q`, `limit`, and `offset`.
+
+### `POST /api/knowledge-points`
+
+Creates a knowledge point.
+
+```json
+{
+  "name": "Quadratic Functions",
+  "subject": "Mathematics",
+  "parent_id": 1
+}
+```
+
+Names are unique case-insensitively within one subject. A child and its parent must use the same subject.
+
+### `PUT /api/questions/{question_id}/knowledge-points`
+
+Replaces all knowledge points assigned to one question.
+
+```json
+{
+  "ids": [1, 2]
+}
+```
+
+Duplicate IDs are ignored. A question can have at most 30 knowledge points. Deletion is intentionally not included in the MVP because points may already be shared by questions.
+
+## Review Statistics
+
+### `GET /api/reviews/stats`
+
+Returns lightweight UTC-based review statistics:
+
+- `due_count`: pending reviews due as of the requested time
+- `completed_today`: reviews completed during the current UTC day
+- `completed_seven_days`: reviews completed during the current UTC day and previous six days
+- `result_counts_seven_days`: counts for `again`, `hard`, `good`, and `easy`
+- `mastered_rate_seven_days`: `(good + easy) / completed_seven_days`, or `null` when no reviews were completed
+
+An optional `now` datetime is supported for deterministic reporting and tests. Normal clients should omit it.
+
+## Question Statistics
+
+### `GET /api/questions/stats`
+
+Returns lightweight question-library aggregates:
+
+- `total_questions`
+- `status_counts`
+- `subject_counts`, with blank subjects grouped as `Uncategorized`
+- `top_knowledge_points`, ordered by assigned question count
+
+The optional `knowledge_limit` query parameter defaults to 10 and is limited to 50. Aggregates are calculated by the database rather than loading every question into application memory.
+
+## Question Archive Workflow
+
+### `POST /api/questions/{question_id}/archive`
+
+Marks a question as `archived`. The operation is idempotent and does not delete records, images, OCR output, tags, knowledge points, or review history.
+
+### `POST /api/questions/{question_id}/restore`
+
+Restores an archived question to `corrected`. Returns HTTP 409 when the question is not archived.
+
+## Review History
+
+### `GET /api/reviews/history`
+
+Lists completed reviews newest first. Optional filters:
+
+- `result`: `again`, `hard`, `good`, or `easy`
+- `question_id`
+- `reviewed_from`
+- `reviewed_to`
+- `limit` and `offset`
+
+Each item includes a question summary. Invalid result values or reversed date ranges return HTTP 400.
+
+## Detailed Health
+
+### `GET /health/details`
+
+Returns deployment-oriented checks while keeping `GET /health` unchanged for simple liveness probes:
+
+- database connectivity
+- upload directory path and writability
+- total, used, and free disk bytes
+- configured minimum free disk threshold
+
+Set `MIN_FREE_DISK_BYTES` to override the default 1 GiB threshold. The response status is `degraded` when any detailed check fails.
+
+## Question Export
+
+### `GET /api/questions/{question_id}/export`
+
+Downloads one question using `format=json` or `format=markdown`.
+
+JSON export includes a versioned envelope and the full question detail response, including metadata, corrected text, OCR text, tags, knowledge points, assets, OCR jobs, and review records. Image bytes are not embedded.
+
+Markdown export contains readable metadata, corrected text, OCR text, knowledge points, mistake tags, and review history. Response filenames are sanitized from the question title.

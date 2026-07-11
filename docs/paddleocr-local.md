@@ -64,3 +64,28 @@ PaddlePaddle GPU verification passed after adding the pip-installed NVIDIA DLL d
 ```
 
 Manual OCR verification on `D:\Code\WB\testImage\test1.png` returned recognized text and a confidence score using the local model directories.
+## OCR Text Cleanup
+
+The Paddle engine keeps PaddleOCR's original `rec_texts` in `raw_json` and applies conservative cleanup only when building `raw_text`:
+
+- repairs UTF-8 bytes that were displayed as Latin-1/Windows text only when the repair restores more CJK characters
+- applies Unicode NFKC normalization for full-width Latin letters, digits, and punctuation
+- removes invisible control/format characters and trims repeated whitespace
+- preserves recognized mathematical symbols and does not guess missing formula structure
+
+This improves readable Chinese and mixed math text without hiding the original PaddleOCR result.
+
+## Real Math Image Evaluation
+
+Evaluated on the Windows laptop with `D:\Code\WB\testImage\test1.png`, PP-OCRv6 medium local models, PaddleOCR 3.7.0, and the RTX 5070 Laptop GPU.
+
+Observed result:
+
+```text
+Elapsed: 3.898 seconds
+Confidence: 0.945092499256134
+Original rec_texts: f(x) = xex,则 f(n)(x)
+Cleaned raw_text:  f(x) = xex,则 f(n)(x)
+```
+
+The source image contains superscript structure (`xe^x` and `f^(n)(x)`). The general OCR model flattened those superscripts into plain text. The cleanup correctly left this output unchanged because guessing formula structure from plain OCR text would risk corrupting legitimate questions. The current MVP should continue to rely on the Web/PWA correction field for formula repair. A future formula-specific OCR or layout model can be evaluated separately on the Windows laptop without moving OCR to the server.
