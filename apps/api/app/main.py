@@ -19,12 +19,14 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.database import engine, get_db, init_db
 from apps.api.app.models import (
+    Chapter,
     KnowledgePoint,
     MistakeTag,
     OCRJob,
     Question,
     QuestionAsset,
     Review,
+    Source,
     question_knowledge_points,
     utc_now,
 )
@@ -68,8 +70,36 @@ class QuestionUpdatePayload(BaseModel):
     corrected_text: Optional[str] = None
     question_type: Optional[str] = None
     difficulty: Optional[str] = None
+    source: Optional[str] = None
+    source_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    source_page: Optional[str] = None
+    answer_text: Optional[str] = None
+    solution_text: Optional[str] = None
+    personal_solution: Optional[str] = None
+    wrong_answer: Optional[str] = None
+    mistake_analysis: Optional[str] = None
+    key_steps: Optional[str] = None
+    notes: Optional[str] = None
     status: Optional[str] = None
 
+
+class SourceCreatePayload(BaseModel):
+    name: str
+    source_type: Optional[str] = None
+    subject: Optional[str] = None
+    author: Optional[str] = None
+    publisher: Optional[str] = None
+    file_path: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ChapterCreatePayload(BaseModel):
+    source_id: int
+    name: str
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+    description: Optional[str] = None
 
 class MistakeTagUpdatePayload(BaseModel):
     names: list[str]
@@ -341,6 +371,33 @@ def _next_pending_review(question: Question) -> Optional[Review]:
     return min(pending_reviews, key=lambda review: (review.due_at, review.id), default=None)
 
 
+def _source_response(source: Source) -> dict:
+    return {
+        "source_id": source.id,
+        "name": source.name,
+        "source_type": source.source_type,
+        "subject": source.subject,
+        "author": source.author,
+        "publisher": source.publisher,
+        "file_path": source.file_path,
+        "description": source.description,
+        "created_at": source.created_at,
+        "updated_at": source.updated_at,
+    }
+
+
+def _chapter_response(chapter: Chapter) -> dict:
+    return {
+        "chapter_id": chapter.id,
+        "source_id": chapter.source_id,
+        "parent_id": chapter.parent_id,
+        "name": chapter.name,
+        "sort_order": chapter.sort_order,
+        "description": chapter.description,
+        "created_at": chapter.created_at,
+        "updated_at": chapter.updated_at,
+    }
+
 def _question_summary_response(question: Question) -> dict:
     assets = _sorted_assets(question)
     jobs = _sorted_ocr_jobs(question)
@@ -356,6 +413,18 @@ def _question_summary_response(question: Question) -> dict:
         "question_type": question.question_type,
         "difficulty": question.difficulty,
         "source": question.source,
+        "source_id": question.source_id,
+        "source_record": _source_response(question.source_record) if question.source_record else None,
+        "chapter_id": question.chapter_id,
+        "chapter": _chapter_response(question.chapter) if question.chapter else None,
+        "source_page": question.source_page,
+        "answer_text": question.answer_text,
+        "solution_text": question.solution_text,
+        "personal_solution": question.personal_solution,
+        "wrong_answer": question.wrong_answer,
+        "mistake_analysis": question.mistake_analysis,
+        "key_steps": question.key_steps,
+        "notes": question.notes,
         "status": question.status,
         "asset_count": len(assets),
         "first_asset": _asset_response(first_asset) if first_asset else None,
@@ -890,6 +959,67 @@ async def import_questions(file: UploadFile = File(...), db: Session = Depends(g
     }
 
 
+@app.get("/api/sources")
+def list_sources(db: Session = Depends(get_db)):
+    sources = db.query(Source).order_by(func.lower(Source.name), Source.id).all()
+    return {
+        "items": [
+            {
+                **_source_response(source),
+                "chapters": [
+                    _chapter_response(chapter)
+                    for chapter in sorted(source.chapters, key=lambda item: (item.sort_order, item.name.casefold(), item.id))
+                ],
+            }
+            for source in sources
+        ]
+    }
+
+
+@app.post("/api/sources", status_code=status.HTTP_201_CREATED)
+def create_source(payload: SourceCreatePayload, db: Session = Depends(get_db)):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source name is required.")
+    source = Source(
+        name=name,
+        source_type=payload.source_type.strip() if payload.source_type else None,
+        subject=payload.subject.strip() if payload.subject else None,
+        author=payload.author.strip() if payload.author else None,
+        publisher=payload.publisher.strip() if payload.publisher else None,
+        file_path=payload.file_path.strip() if payload.file_path else None,
+        description=payload.description.strip() if payload.description else None,
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+    return {"source": _source_response(source)}
+
+
+@app.post("/api/chapters", status_code=status.HTTP_201_CREATED)
+def create_chapter(payload: ChapterCreatePayload, db: Session = Depends(get_db)):
+    source = db.get(Source, payload.source_id)
+    if source is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found.")
+    if payload.parent_id is not None:
+        parent = db.get(Chapter, payload.parent_id)
+        if parent is None or parent.source_id != source.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Parent chapter must belong to the source.")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter name is required.")
+    chapter = Chapter(
+        source_id=source.id,
+        parent_id=payload.parent_id,
+        name=name,
+        sort_order=payload.sort_order,
+        description=payload.description.strip() if payload.description else None,
+    )
+    db.add(chapter)
+    db.commit()
+    db.refresh(chapter)
+    return {"chapter": _chapter_response(chapter)}
+
 @app.get("/api/questions")
 def list_questions(
     status_filter: Optional[str] = Query(default=None, alias="status"),
@@ -1335,10 +1465,17 @@ def update_question(
     updates = payload.model_dump(exclude_unset=True)
 
     if "status" in updates and updates["status"] not in ALLOWED_QUESTION_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid question status.",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid question status.")
+    if "source_id" in updates and updates["source_id"] is not None and db.get(Source, updates["source_id"]) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_id.")
+    if "chapter_id" in updates and updates["chapter_id"] is not None:
+        chapter = db.get(Chapter, updates["chapter_id"])
+        if chapter is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chapter_id.")
+        effective_source_id = updates.get("source_id", question.source_id)
+        if effective_source_id is not None and chapter.source_id != effective_source_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter does not belong to the selected source.")
+        updates.setdefault("source_id", chapter.source_id)
 
     for field, value in updates.items():
         setattr(question, field, value)
@@ -1346,7 +1483,8 @@ def update_question(
     if updates:
         question.updated_at = utc_now()
         db.commit()
-        db.refresh(question)
+        db.expire_all()
+        question = _get_question_or_404(db, question_id)
 
     return {"question": _question_detail_response(question)}
 

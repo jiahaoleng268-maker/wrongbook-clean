@@ -682,3 +682,12 @@ Creates a new pending OCR job from the question's first stored image. It keeps p
 ## Formula OCR crop
 
 `POST /api/questions/{question_id}/formula-ocr` accepts one tightly cropped image up to 5 MiB. It creates a `QuestionAsset` with `asset_type=formula_crop` and an OCR job with `engine_name=formula`. Only one pending or running formula job is allowed per question. Formula result submission updates only the OCR job; it never changes the question `raw_text`, `corrected_text`, or status.
+
+## Sources and chapters
+
+- `GET /api/sources` lists sources with their chapters.
+- `POST /api/sources` creates a source.
+- `POST /api/chapters` creates a chapter and validates that its optional parent belongs to the same source.
+- `PATCH /api/questions/{question_id}` accepts `source_id`, `chapter_id`, `source_page`, `answer_text`, `solution_text`, `personal_solution`, `wrong_answer`, `mistake_analysis`, `key_steps`, and `notes`.
+
+Assigning a chapter automatically assigns its source. A chapter from a different selected source is rejected.

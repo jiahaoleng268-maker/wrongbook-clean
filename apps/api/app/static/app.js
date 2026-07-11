@@ -14,6 +14,7 @@
     activeView: "library",
     formulaSelection: null,
     formulaImage: null,
+    sources: [],
   };
 
   const statusLabels = {
@@ -126,6 +127,32 @@
     submitFormulaCropButton: $("submitFormulaCropButton"),
     formulaCropState: $("formulaCropState"),
     saveState: $("saveState"),
+    answerTextInput: $("answerTextInput"),
+    solutionTextInput: $("solutionTextInput"),
+    personalSolutionInput: $("personalSolutionInput"),
+    keyStepsInput: $("keyStepsInput"),
+    wrongAnswerInput: $("wrongAnswerInput"),
+    mistakeAnalysisInput: $("mistakeAnalysisInput"),
+    notesInput: $("notesInput"),
+    sourceSelect: $("sourceSelect"),
+    chapterSelect: $("chapterSelect"),
+    sourcePageInput: $("sourcePageInput"),
+    latexPreviewContent: $("latexPreviewContent"),
+    sourceTree: $("sourceTree"),
+    openSourceDialogButton: $("openSourceDialogButton"),
+    sourceDialog: $("sourceDialog"),
+    closeSourceDialogButton: $("closeSourceDialogButton"),
+    sourceForm: $("sourceForm"),
+    sourceNameInput: $("sourceNameInput"),
+    sourceSubjectInput: $("sourceSubjectInput"),
+    sourceTypeInput: $("sourceTypeInput"),
+    chapterForm: $("chapterForm"),
+    chapterSourceInput: $("chapterSourceInput"),
+    parentChapterInput: $("parentChapterInput"),
+    chapterNameInput: $("chapterNameInput"),
+    sourceDialogState: $("sourceDialogState"),
+    detailTabs: Array.from(document.querySelectorAll("[data-detail-tab]")),
+    detailPanels: Array.from(document.querySelectorAll("[data-detail-panel]")),
     appViews: Array.from(document.querySelectorAll(".app-view")),
     bottomNavItems: Array.from(document.querySelectorAll(".bottom-nav-item")),
   };
@@ -690,6 +717,61 @@
       elements.submitFormulaCropButton.disabled = false;
     }
   }
+  function renderLatexPreview() {
+    const content = elements.correctedTextInput.value || "";
+    elements.latexPreviewContent.replaceChildren();
+    const blockPattern = /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\$([^$\n]+)\$|\\\((.*?)\\\)/g;
+    let lastIndex = 0;
+    for (const match of content.matchAll(blockPattern)) {
+      if (match.index > lastIndex) elements.latexPreviewContent.append(document.createTextNode(content.slice(lastIndex, match.index)));
+      const formula = match[1] || match[2] || match[3] || match[4] || "";
+      const node = document.createElement(match[1] || match[2] ? "div" : "span");
+      if (window.katex) {
+        try { window.katex.render(formula, node, { throwOnError: false, displayMode: Boolean(match[1] || match[2]) }); }
+        catch { node.textContent = formula; }
+      } else node.textContent = formula;
+      elements.latexPreviewContent.append(node);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < content.length) elements.latexPreviewContent.append(document.createTextNode(content.slice(lastIndex)));
+  }
+
+  function renderSourceOptions(selectedSourceId = null, selectedChapterId = null) {
+    const sourceOptions = ['<option value="">未选择</option>'];
+    state.sources.forEach((source) => sourceOptions.push(`<option value="${source.source_id}">${escapeHtml(source.name)}</option>`));
+    elements.sourceSelect.innerHTML = sourceOptions.join("");
+    elements.chapterSourceInput.innerHTML = sourceOptions.join("");
+    if (selectedSourceId) elements.sourceSelect.value = String(selectedSourceId);
+    const sourceId = Number(elements.sourceSelect.value || selectedSourceId || 0);
+    const source = state.sources.find((item) => item.source_id === sourceId);
+    const chapters = source ? source.chapters || [] : [];
+    elements.chapterSelect.innerHTML = '<option value="">未选择</option>' + chapters.map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join("");
+    elements.parentChapterInput.innerHTML = '<option value="">无上级章节</option>' + chapters.map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join("");
+    if (selectedChapterId) elements.chapterSelect.value = String(selectedChapterId);
+  }
+
+  function renderSourceTree() {
+    elements.sourceTree.replaceChildren();
+    state.sources.forEach((source) => {
+      const group = document.createElement("div"); group.className = "source-tree-group";
+      const title = document.createElement("button"); title.type = "button"; title.textContent = source.name; title.dataset.sourceId = source.source_id;
+      group.append(title);
+      (source.chapters || []).forEach((chapter) => { const item = document.createElement("button"); item.type = "button"; item.textContent = `↳ ${chapter.name}`; item.dataset.chapterId = chapter.chapter_id; group.append(item); });
+      elements.sourceTree.append(group);
+    });
+  }
+
+  async function loadSources() {
+    const data = await requestJSON("/api/sources");
+    state.sources = data.items || [];
+    renderSourceTree();
+    renderSourceOptions(state.currentQuestion?.source_id, state.currentQuestion?.chapter_id);
+  }
+
+  function switchDetailTab(name) {
+    elements.detailTabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.detailTab === name));
+    elements.detailPanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === name));
+  }
   function renderDetail(question) {
     const firstAsset = (question.assets || [])[0] || question.first_asset;
     const job = latestJob(question);
@@ -707,6 +789,16 @@
     elements.restoreQuestionButton.hidden = question.status !== "archived";
     elements.rawTextInput.value = question.raw_text || "";
     elements.correctedTextInput.value = question.corrected_text || "";
+    elements.answerTextInput.value = question.answer_text || "";
+    elements.solutionTextInput.value = question.solution_text || "";
+    elements.personalSolutionInput.value = question.personal_solution || "";
+    elements.keyStepsInput.value = question.key_steps || "";
+    elements.wrongAnswerInput.value = question.wrong_answer || "";
+    elements.mistakeAnalysisInput.value = question.mistake_analysis || "";
+    elements.notesInput.value = question.notes || "";
+    elements.sourcePageInput.value = question.source_page || "";
+    renderSourceOptions(question.source_id, question.chapter_id);
+    renderLatexPreview();
     renderKnowledgePoints((question.knowledge_points || []).map((point) => point.knowledge_point_id));
     if (elements.formulaHistoryList) renderFormulaHistory(question);
     elements.knowledgePointSubjectInput.value = question.subject || "";
@@ -814,6 +906,16 @@
       difficulty: cleanValue(elements.difficultyInput.value),
       status: elements.questionStatusInput.value,
       corrected_text: cleanValue(elements.correctedTextInput.value),
+      answer_text: cleanValue(elements.answerTextInput.value),
+      solution_text: cleanValue(elements.solutionTextInput.value),
+      personal_solution: cleanValue(elements.personalSolutionInput.value),
+      key_steps: cleanValue(elements.keyStepsInput.value),
+      wrong_answer: cleanValue(elements.wrongAnswerInput.value),
+      mistake_analysis: cleanValue(elements.mistakeAnalysisInput.value),
+      notes: cleanValue(elements.notesInput.value),
+      source_id: elements.sourceSelect.value ? Number(elements.sourceSelect.value) : null,
+      chapter_id: elements.chapterSelect.value ? Number(elements.chapterSelect.value) : null,
+      source_page: cleanValue(elements.sourcePageInput.value),
     };
 
     elements.saveButton.disabled = true;
@@ -963,6 +1065,38 @@
     elements.appViews.forEach((view) => {
       view.classList.toggle("is-mobile-active", view.dataset.view === viewName);
     });
+    elements.detailTabs.forEach((tab) => tab.addEventListener("click", () => switchDetailTab(tab.dataset.detailTab)));
+    elements.correctedTextInput.addEventListener("input", renderLatexPreview);
+    elements.sourceSelect.addEventListener("change", () => { renderSourceOptions(Number(elements.sourceSelect.value || 0), null); markDirty(); });
+    elements.chapterSelect.addEventListener("change", markDirty);
+    elements.openSourceDialogButton.addEventListener("click", () => { renderSourceOptions(); elements.sourceDialog.showModal(); });
+    elements.closeSourceDialogButton.addEventListener("click", () => elements.sourceDialog.close());
+    elements.chapterSourceInput.addEventListener("change", () => {
+      const source = state.sources.find((item) => item.source_id === Number(elements.chapterSourceInput.value));
+      elements.parentChapterInput.innerHTML = '<option value="">无上级章节</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
+    });
+    elements.sourceForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await requestJSON("/api/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: elements.sourceNameInput.value, subject: elements.sourceSubjectInput.value || null, source_type: elements.sourceTypeInput.value || null }) });
+        elements.sourceForm.reset(); await loadSources(); setStateText(elements.sourceDialogState, "资料已创建", "success");
+      } catch (error) { setStateText(elements.sourceDialogState, error.message, "error"); }
+    });
+    elements.chapterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await requestJSON("/api/chapters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_id: Number(elements.chapterSourceInput.value), parent_id: elements.parentChapterInput.value ? Number(elements.parentChapterInput.value) : null, name: elements.chapterNameInput.value }) });
+        elements.chapterForm.reset(); await loadSources(); setStateText(elements.sourceDialogState, "章节已创建", "success");
+      } catch (error) { setStateText(elements.sourceDialogState, error.message, "error"); }
+    });
+    elements.sourceTree.addEventListener("click", (event) => {
+      const target = event.target.closest("button"); if (!target) return;
+      const source = target.dataset.sourceId ? state.sources.find((item) => item.source_id === Number(target.dataset.sourceId)) : null;
+      const chapterId = target.dataset.chapterId ? Number(target.dataset.chapterId) : null;
+      const chapterSource = chapterId ? state.sources.find((item) => (item.chapters || []).some((chapter) => chapter.chapter_id === chapterId)) : null;
+      elements.searchInput.value = source?.name || chapterSource?.chapters.find((chapter) => chapter.chapter_id === chapterId)?.name || "";
+      state.questionOffset = 0; loadQuestions();
+    });
     elements.bottomNavItems.forEach((item) => {
       const active = item.dataset.targetView === viewName;
       item.classList.toggle("is-active", active);
@@ -1038,6 +1172,38 @@
       const file = elements.galleryInput.files[0];
       elements.selectedImageName.textContent = file ? file.name : "尚未选择图片";
     });
+    elements.detailTabs.forEach((tab) => tab.addEventListener("click", () => switchDetailTab(tab.dataset.detailTab)));
+    elements.correctedTextInput.addEventListener("input", renderLatexPreview);
+    elements.sourceSelect.addEventListener("change", () => { renderSourceOptions(Number(elements.sourceSelect.value || 0), null); markDirty(); });
+    elements.chapterSelect.addEventListener("change", markDirty);
+    elements.openSourceDialogButton.addEventListener("click", () => { renderSourceOptions(); elements.sourceDialog.showModal(); });
+    elements.closeSourceDialogButton.addEventListener("click", () => elements.sourceDialog.close());
+    elements.chapterSourceInput.addEventListener("change", () => {
+      const source = state.sources.find((item) => item.source_id === Number(elements.chapterSourceInput.value));
+      elements.parentChapterInput.innerHTML = '<option value="">无上级章节</option>' + ((source?.chapters || []).map((chapter) => `<option value="${chapter.chapter_id}">${escapeHtml(chapter.name)}</option>`).join(""));
+    });
+    elements.sourceForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await requestJSON("/api/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: elements.sourceNameInput.value, subject: elements.sourceSubjectInput.value || null, source_type: elements.sourceTypeInput.value || null }) });
+        elements.sourceForm.reset(); await loadSources(); setStateText(elements.sourceDialogState, "资料已创建", "success");
+      } catch (error) { setStateText(elements.sourceDialogState, error.message, "error"); }
+    });
+    elements.chapterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await requestJSON("/api/chapters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_id: Number(elements.chapterSourceInput.value), parent_id: elements.parentChapterInput.value ? Number(elements.parentChapterInput.value) : null, name: elements.chapterNameInput.value }) });
+        elements.chapterForm.reset(); await loadSources(); setStateText(elements.sourceDialogState, "章节已创建", "success");
+      } catch (error) { setStateText(elements.sourceDialogState, error.message, "error"); }
+    });
+    elements.sourceTree.addEventListener("click", (event) => {
+      const target = event.target.closest("button"); if (!target) return;
+      const source = target.dataset.sourceId ? state.sources.find((item) => item.source_id === Number(target.dataset.sourceId)) : null;
+      const chapterId = target.dataset.chapterId ? Number(target.dataset.chapterId) : null;
+      const chapterSource = chapterId ? state.sources.find((item) => (item.chapters || []).some((chapter) => chapter.chapter_id === chapterId)) : null;
+      elements.searchInput.value = source?.name || chapterSource?.chapters.find((chapter) => chapter.chapter_id === chapterId)?.name || "";
+      state.questionOffset = 0; loadQuestions();
+    });
     elements.bottomNavItems.forEach((item) => {
       item.addEventListener("click", () => switchView(item.dataset.targetView));
     });
@@ -1055,6 +1221,14 @@
       elements.difficultyInput,
       elements.questionStatusInput,
       elements.correctedTextInput,
+      elements.answerTextInput,
+      elements.solutionTextInput,
+      elements.personalSolutionInput,
+      elements.keyStepsInput,
+      elements.wrongAnswerInput,
+      elements.mistakeAnalysisInput,
+      elements.notesInput,
+      elements.sourcePageInput,
       elements.mistakeTagsInput,
     ].forEach((element) => element.addEventListener("input", markDirty));
   }
@@ -1094,5 +1268,6 @@
   loadQuestions({ selectFirst: true });
   loadQuestionStats();
   loadKnowledgePoints();
+  loadSources();
   loadMistakeTagSuggestions();
 })();

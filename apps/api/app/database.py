@@ -56,6 +56,25 @@ def _apply_lightweight_migrations() -> None:
             connection.execute(text("ALTER TABLE ocr_jobs ADD COLUMN engine_name VARCHAR(50) NOT NULL DEFAULT 'paddle'"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_ocr_jobs_engine_name ON ocr_jobs (engine_name)"))
 
+    question_columns = {column["name"] for column in inspect(engine).get_columns("questions")}
+    additions = {
+        "source_id": "INTEGER",
+        "chapter_id": "INTEGER",
+        "source_page": "VARCHAR(50)",
+        "answer_text": "TEXT",
+        "solution_text": "TEXT",
+        "personal_solution": "TEXT",
+        "wrong_answer": "TEXT",
+        "mistake_analysis": "TEXT",
+        "key_steps": "TEXT",
+        "notes": "TEXT",
+    }
+    with engine.begin() as connection:
+        for column_name, column_type in additions.items():
+            if column_name not in question_columns:
+                connection.execute(text(f"ALTER TABLE questions ADD COLUMN {column_name} {column_type}"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_source_id ON questions (source_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_chapter_id ON questions (chapter_id)"))
 
 def get_db():
     db = SessionLocal()

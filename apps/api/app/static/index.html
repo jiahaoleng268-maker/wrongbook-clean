@@ -8,6 +8,7 @@
     <link rel="manifest" href="/app/static/manifest.webmanifest" />
     <link rel="icon" href="/app/static/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/app/static/app.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" />
   </head>
   <body>
     <a class="skip-link" href="#mainContent">跳到主要内容</a>
@@ -157,7 +158,9 @@
             </div>
 
             <div id="detailStatus" class="inline-status" role="status" aria-live="polite"></div>
+            <div class="detail-tabs" role="tablist"><button type="button" class="detail-tab is-active" data-detail-tab="question">题目</button><button type="button" class="detail-tab" data-detail-tab="solution">答案解析</button><button type="button" class="detail-tab" data-detail-tab="mistake">错因分析</button><button type="button" class="detail-tab" data-detail-tab="classification">分类信息</button><button type="button" class="detail-tab" data-detail-tab="source">原始资料</button></div>
 
+            <section class="detail-tab-panel is-active" data-detail-panel="question">
             <div class="detail-grid">
               <div class="image-frame">
                 <img id="questionImage" alt="错题图片" />
@@ -198,6 +201,8 @@
               </div>
             </div>
 
+            </section>
+            <section class="detail-tab-panel" data-detail-panel="source">
             <div class="text-grid">
               <label>
                 <span>OCR 原文</span>
@@ -205,11 +210,15 @@
               </label>
               <label>
                 <span>校正文</span>
-                <textarea id="correctedTextInput" name="corrected_text"></textarea>
+                <textarea id="correctedTextInput" name="corrected_text"></textarea><div class="latex-preview"><strong>数学预览</strong><div id="latexPreviewContent" class="latex-preview-content"></div></div>
               </label>
             </div>
 
 
+            </section>
+            <section class="detail-tab-panel" data-detail-panel="solution"><div class="structured-editor-grid"><label><span>标准答案</span><textarea id="answerTextInput"></textarea></label><label><span>解题过程</span><textarea id="solutionTextInput"></textarea></label><label><span>个人解法</span><textarea id="personalSolutionInput"></textarea></label><label><span>关键步骤</span><textarea id="keyStepsInput"></textarea></label></div></section>
+            <section class="detail-tab-panel" data-detail-panel="mistake"><div class="structured-editor-grid"><label><span>当时错误答案</span><textarea id="wrongAnswerInput"></textarea></label><label><span>错误原因</span><textarea id="mistakeAnalysisInput"></textarea></label><label class="wide-field"><span>补充笔记</span><textarea id="notesInput"></textarea></label></div></section>
+            <section class="detail-tab-panel" data-detail-panel="classification"><div class="classification-grid"><label><span>所属资料</span><select id="sourceSelect"><option value="">未选择</option></select></label><label><span>所属章节</span><select id="chapterSelect"><option value="">未选择</option></select></label><label><span>来源页码</span><input id="sourcePageInput" type="text" maxlength="50" /></label></div></section>
             <section class="formula-history legacy-ocr-panel" aria-labelledby="formulaHistoryTitle">
               <div class="section-heading-row">
                 <h3 id="formulaHistoryTitle">公式识别历史</h3>
@@ -267,10 +276,16 @@
       <div class="sidebar-brand"><strong>WrongBook</strong><span>PC 错题管理器</span></div>
       <button class="bottom-nav-item is-active" type="button" data-target-view="library" aria-current="page"><span>题</span><strong>题库</strong></button>
       <button class="bottom-nav-item" type="button" data-target-view="home"><span>导</span><strong>导入</strong></button>
-      <div class="sidebar-note">复习与本地 OCR 已暂时冻结，历史数据仍保留。</div>
+      <section class="source-tree-panel"><div class="sidebar-section-title">资料目录</div><div id="sourceTree" class="source-tree"></div><button id="openSourceDialogButton" class="sidebar-action" type="button">+ 新建资料/章节</button></section><div class="sidebar-note">复习与本地 OCR 已暂时冻结，历史数据仍保留。</div>
     </nav>
 
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
     <script src="/app/static/app.js" defer></script>
 
-  </body>
+
+    <dialog id="sourceDialog" class="source-dialog">
+      <form id="sourceForm" class="source-form"><h2>新建资料</h2><input id="sourceNameInput" required placeholder="资料名称" /><input id="sourceSubjectInput" placeholder="科目" /><select id="sourceTypeInput"><option value="教材">教材</option><option value="PDF">PDF</option><option value="试卷">试卷</option><option value="其他">其他</option></select><button class="primary-button" type="submit">创建资料</button></form>
+      <form id="chapterForm" class="source-form"><h2>新建章节</h2><select id="chapterSourceInput" required></select><select id="parentChapterInput"><option value="">无上级章节</option></select><input id="chapterNameInput" required placeholder="章节名称" /><button class="primary-button" type="submit">创建章节</button></form>
+      <button id="closeSourceDialogButton" class="ghost-button" type="button">关闭</button><span id="sourceDialogState" class="state-text"></span>
+    </dialog>  </body>
 </html>

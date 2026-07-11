@@ -192,6 +192,43 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertNotEqual(detail["raw_text"], r"\frac{1}{x}")
         formula_jobs = [job for job in detail["ocr_jobs"] if job["engine_name"] == "formula"]
         self.assertEqual(formula_jobs[-1]["raw_text"], r"\frac{1}{x}")
+    def test_source_chapter_and_structured_question_fields(self) -> None:
+        source = self.request_json(
+            "POST",
+            "/api/sources",
+            payload={"name": "高数基础篇", "source_type": "教材", "subject": "高等数学"},
+        )["source"]
+        chapter = self.request_json(
+            "POST",
+            "/api/chapters",
+            payload={"source_id": source["source_id"], "name": "函数极限"},
+        )["chapter"]
+        upload = self.upload_image("structured.png")
+        question_id = upload["question_id"]
+        updated = self.request_json(
+            "PATCH",
+            f"/api/questions/{question_id}",
+            payload={
+                "source_id": source["source_id"],
+                "chapter_id": chapter["chapter_id"],
+                "source_page": "18",
+                "answer_text": "1",
+                "solution_text": r"使用 $\\lim_{x\\to0}\\frac{\\sin x}{x}=1$",
+                "personal_solution": "等价无穷小",
+                "wrong_answer": "0",
+                "mistake_analysis": "忘记重要极限",
+                "key_steps": "识别基本极限",
+                "notes": "再次检查定义域",
+            },
+        )["question"]
+        self.assertEqual(updated["source_record"]["name"], "高数基础篇")
+        self.assertEqual(updated["chapter"]["name"], "函数极限")
+        self.assertEqual(updated["source_page"], "18")
+        self.assertEqual(updated["answer_text"], "1")
+        self.assertEqual(updated["mistake_analysis"], "忘记重要极限")
+        sources = self.request_json("GET", "/api/sources")["items"]
+        self.assertEqual(sources[0]["chapters"][0]["name"], "函数极限")
+
     def test_manual_paddle_import_without_ocr_job(self) -> None:
         boundary = f"----wrongbook-manual-{time.time_ns()}"
         parts = [
@@ -231,6 +268,9 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn('id="cameraInput"', html)
         self.assertIn('id="paddleTextInput"', html)
         self.assertIn('class="desktop-sidebar"', html)
+        self.assertIn('id="sourceTree"', html)
+        self.assertIn('id="answerTextInput"', html)
+        self.assertIn('id="latexPreviewContent"', html)
         self.assertIn('id="galleryInput"', html)
         self.assertIn('data-target-view="library"', html)
         self.assertIn('id="knowledgePointList"', html)
@@ -267,7 +307,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v7', service_worker)
+        self.assertIn('wrongbook-web-v8', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)

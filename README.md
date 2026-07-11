@@ -254,3 +254,9 @@ Run `python scripts/evaluate_ocr.py <image-or-directory>` on the Windows OCR lap
 ## Experimental formula OCR
 
 The Windows worker includes an experimental `OCR_ENGINE=formula` backed by `PP-FormulaNet_plus-M`. Install `apps/ocr-worker/requirements-formula.txt` after PaddleOCR. The model is cached outside Git under the user PaddleX model cache. Evaluation confirms that it recovers LaTeX structures such as fractions, roots, superscripts, and integral bounds, but broad page regions containing tables or answer lines can generate severe hallucinations. Formula OCR is available from the question detail page: choose **框选公式识别**, drag a tight rectangle, and submit the crop. The server stores it as a `formula_crop` asset and creates an OCR job with `engine_name=formula`. Formula results remain in OCR history and never overwrite normal OCR text or corrected text; use **插入校正文** to append a selected LaTeX result before saving.
+
+## R2 structured question workspace
+
+The PC workspace now supports source and hierarchical chapter records, structured question fields, detail tabs, and a live LaTeX preview. Create sources and chapters from the left sidebar, assign them in the **分类信息** tab, and edit standard answers, solutions, personal solutions, mistakes, key steps, and notes in dedicated tabs.
+
+The preview recognizes `$...$`, `$$...$$`, `\(...\)`, and `\[...\]`. KaTeX is loaded in the browser; if it is unavailable, the preview falls back to readable source text instead of blocking editing.
