@@ -166,6 +166,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn('id="uploadForm"', html)
         self.assertIn('id="cameraInput"', html)
         self.assertIn('id="galleryInput"', html)
+        self.assertIn('id="galleryInput" type="file" accept="image/*" multiple', html)
         self.assertIn('class="bottom-nav"', html)
         self.assertIn('data-target-view="library"', html)
         self.assertIn('id="knowledgePointList"', html)
@@ -202,7 +203,7 @@ class WrongBookIntegrationTest(unittest.TestCase):
 
         service_worker, service_worker_content_type = self.request_text("GET", "/app/service-worker.js")
         self.assertIn("javascript", service_worker_content_type)
-        self.assertIn('wrongbook-web-v4', service_worker)
+        self.assertIn('wrongbook-web-v5', service_worker)
 
         javascript, js_content_type = self.request_text("GET", "/app/static/app.js")
         self.assertIn("javascript", js_content_type)
@@ -229,10 +230,11 @@ class WrongBookIntegrationTest(unittest.TestCase):
         self.assertIn("/complete", javascript)
         self.assertIn("serviceWorker", javascript)
         self.assertIn("switchView", javascript)
-        self.assertIn("selectedImageFile", javascript)
+        self.assertIn("selectedImageFiles", javascript)
         self.assertNotIn("elements.fileLabel", javascript)
         self.assertIn("elements.selectedImageName.textContent", javascript)
-        self.assertIn("elements.uploadButton.disabled = !state.selectedImageFile", javascript)
+        self.assertIn("for (let index = 0; index < files.length; index += 1)", javascript)
+        self.assertIn("failures.push", javascript)
         self.assertIn("galleryInput", javascript)
 
         manifest = self.request_json("GET", "/app/static/manifest.webmanifest")

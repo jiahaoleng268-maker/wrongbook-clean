@@ -177,3 +177,7 @@ The question-list panel can export the current search and status filter as JSON 
 ## Mobile app shell
 
 At widths up to 620 CSS pixels, top-level panels become four directory views controlled by fixed bottom navigation. The upload view intentionally uses two file inputs: one with `capture="environment"` for the camera and one without `capture` for the photo gallery. Keep both inputs wired to the same upload request.
+
+## Batch gallery upload
+
+The gallery input supports selecting multiple images. The browser uploads them sequentially through the existing single-image endpoint, reports per-batch progress, continues after individual failures, and refreshes the library once after the batch. Camera capture remains single-image. This avoids increasing API memory pressure on the low-resource server.

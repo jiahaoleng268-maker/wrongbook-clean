@@ -10,7 +10,7 @@
     questionTotal: 0,
     historyOffset: 0,
     historyTotal: 0,
-    selectedImageFile: null,
+    selectedImageFiles: [],
     activeView: "home",
   };
 
@@ -638,33 +638,43 @@
 
   async function handleUpload(event) {
     event.preventDefault();
-    const file = state.selectedImageFile;
-    if (!file) {
-      setStateText(elements.uploadState, "请选择图片", "error");
+    const files = state.selectedImageFiles;
+    if (!files.length) {
+      setStateText(elements.uploadState, "\u8bf7\u9009\u62e9\u56fe\u7247", "error");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", file);
     elements.uploadButton.disabled = true;
-    setStateText(elements.uploadState, "上传中...");
+    let succeeded = 0;
+    const failures = [];
+    let lastQuestionId = null;
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      setStateText(elements.uploadState, `\u6b63\u5728\u4e0a\u4f20 ${index + 1} / ${files.length}\uff1a${file.name}`);
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const upload = await requestJSON("/api/questions/upload", { method: "POST", body: formData });
+        succeeded += 1;
+        lastQuestionId = upload.question_id;
+      } catch (error) {
+        failures.push(`${file.name}: ${error.message}`);
+      }
+    }
 
-    try {
-      const upload = await requestJSON("/api/questions/upload", {
-        method: "POST",
-        body: formData,
-      });
-      elements.statusFilter.value = "";
-      elements.uploadForm.reset();
-      state.selectedImageFile = null;
-      elements.selectedImageName.textContent = "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
-      setStateText(elements.uploadState, `\u5df2\u4e0a\u4f20\uff0cOCR \u4efb\u52a1 #${upload.ocr_job_id}`, "success");
-      await loadQuestions();
-      await selectQuestion(upload.question_id);
-    } catch (error) {
-      setStateText(elements.uploadState, error.message, "error");
-    } finally {
-      elements.uploadButton.disabled = !state.selectedImageFile;
+    elements.statusFilter.value = "";
+    elements.uploadForm.reset();
+    state.selectedImageFiles = [];
+    elements.selectedImageName.textContent = "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
+    elements.uploadButton.disabled = true;
+    await Promise.all([loadQuestions(), loadQuestionStats()]);
+    if (lastQuestionId) await selectQuestion(lastQuestionId);
+
+    if (failures.length) {
+      const summary = `\u5df2\u4e0a\u4f20 ${succeeded} \u5f20\uff0c\u5931\u8d25 ${failures.length} \u5f20\u3002${failures.slice(0, 2).join("\uff1b")}`;
+      setStateText(elements.uploadState, summary, "error");
+    } else {
+      setStateText(elements.uploadState, `\u5df2\u6210\u529f\u4e0a\u4f20 ${succeeded} \u5f20\uff0cOCR \u4efb\u52a1\u5df2\u521b\u5efa\u3002`, "success");
     }
   }
 
@@ -858,11 +868,14 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function selectImageSource(file) {
-    state.selectedImageFile = file || null;
-    elements.selectedImageName.textContent = file ? file.name : "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
-    elements.uploadButton.disabled = !file;
-    setStateText(elements.uploadState, file ? "\u56fe\u7247\u5df2\u9009\u62e9\uff0c\u53ef\u4ee5\u4e0a\u4f20" : "\u7b49\u5f85\u56fe\u7247", file ? "success" : "");
+  function selectImageSources(files) {
+    state.selectedImageFiles = Array.from(files || []);
+    const count = state.selectedImageFiles.length;
+    elements.selectedImageName.textContent = count
+      ? count === 1 ? state.selectedImageFiles[0].name : `\u5df2\u9009\u62e9 ${count} \u5f20\u56fe\u7247`
+      : "\u5c1a\u672a\u9009\u62e9\u56fe\u7247";
+    elements.uploadButton.disabled = count === 0;
+    setStateText(elements.uploadState, count ? `\u5df2\u9009\u62e9 ${count} \u5f20\uff0c\u53ef\u4ee5\u4e0a\u4f20` : "\u7b49\u5f85\u56fe\u7247", count ? "success" : "");
   }
 
   function setupEvents() {
@@ -914,13 +927,13 @@
     elements.cameraInput.addEventListener("change", () => {
       const file = elements.cameraInput.files[0];
       if (file) elements.galleryInput.value = "";
-      selectImageSource(file);
+      selectImageSources(file ? [file] : []);
     });
 
     elements.galleryInput.addEventListener("change", () => {
-      const file = elements.galleryInput.files[0];
-      if (file) elements.cameraInput.value = "";
-      selectImageSource(file);
+      const files = elements.galleryInput.files;
+      if (files.length) elements.cameraInput.value = "";
+      selectImageSources(files);
     });
 
     elements.bottomNavItems.forEach((item) => {
