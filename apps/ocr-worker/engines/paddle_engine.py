@@ -1,9 +1,10 @@
-﻿import importlib.util
+import importlib.util
 import os
 from pathlib import Path
 import sys
 import tempfile
 from typing import Any
+import unicodedata
 
 from .base import OCREngine, OCREngineError, OCRResult
 
@@ -94,7 +95,11 @@ class PaddleOCREngine(OCREngine):
 
         rec_texts = self._get_field(first, "rec_texts") or []
         rec_scores = self._get_field(first, "rec_scores") or []
-        raw_text = "\n".join(str(text) for text in rec_texts)
+        raw_text = "\n".join(
+            cleaned
+            for text in rec_texts
+            if (cleaned := self._clean_text_line(str(text)))
+        )
         confidence = self._average_score(rec_scores)
         compact_prediction = self._compact_prediction(first)
 
@@ -146,6 +151,61 @@ class PaddleOCREngine(OCREngine):
             return value
         return str(value)
 
+    @classmethod
+    def _clean_text_line(cls, text: str) -> str:
+        repaired = cls._repair_utf8_mojibake(text)
+        normalized = unicodedata.normalize("NFKC", repaired)
+        visible = "".join(
+            character
+            for character in normalized
+            if character in "\t " or unicodedata.category(character) not in {"Cc", "Cf"}
+        )
+        return " ".join(visible.split())
+
+    @classmethod
+    def _repair_utf8_mojibake(cls, text: str) -> str:
+        repaired = []
+        run = []
+
+        for character in text:
+            if ord(character) <= 255:
+                run.append(character)
+                continue
+            if run:
+                repaired.append(cls._repair_mojibake_run("".join(run)))
+                run.clear()
+            repaired.append(character)
+
+        if run:
+            repaired.append(cls._repair_mojibake_run("".join(run)))
+        return "".join(repaired)
+
+    @classmethod
+    def _repair_mojibake_run(cls, text: str) -> str:
+        original_cjk = sum(cls._is_cjk(character) for character in text)
+        best_text = text
+        best_cjk = original_cjk
+
+        for encoding in ("latin-1", "cp1252"):
+            try:
+                candidate = text.encode(encoding).decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+            candidate_cjk = sum(cls._is_cjk(character) for character in candidate)
+            if candidate_cjk > best_cjk:
+                best_text = candidate
+                best_cjk = candidate_cjk
+
+        return best_text
+
+    @staticmethod
+    def _is_cjk(character: str) -> bool:
+        codepoint = ord(character)
+        return (
+            0x3400 <= codepoint <= 0x4DBF
+            or 0x4E00 <= codepoint <= 0x9FFF
+            or 0xF900 <= codepoint <= 0xFAFF
+        )
     @staticmethod
     def _average_score(scores: Any) -> float | None:
         if not scores:
